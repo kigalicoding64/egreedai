@@ -11,6 +11,7 @@ interface ChatAreaProps {
   messages: Message[];
   isLoading: boolean;
   onSendMessage: (message: string) => void;
+  onGenerateImage: (prompt: string) => Promise<void>;
   onStop?: () => void;
   onToggleSidebar: () => void;
 }
@@ -19,6 +20,7 @@ export function ChatArea({
   messages,
   isLoading,
   onSendMessage,
+  onGenerateImage,
   onStop,
   onToggleSidebar,
 }: ChatAreaProps) {
@@ -69,6 +71,7 @@ export function ChatArea({
       {/* Input Area */}
       <ChatInput
         onSendMessage={onSendMessage}
+        onGenerateImage={onGenerateImage}
         isLoading={isLoading}
         onStop={onStop}
       />
