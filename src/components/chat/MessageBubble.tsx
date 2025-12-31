@@ -1,18 +1,36 @@
 import { User, Sparkles, Copy, Check, Volume2, VolumeX } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useVoice } from '@/hooks/useVoice';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface MessageBubbleProps {
   message: Message;
+  autoSpeak?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, autoSpeak = false }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
   const { speak, stopSpeaking, isSpeaking } = useVoice();
+  const [hasAutoSpoken, setHasAutoSpoken] = useState(false);
+
+  // Auto-speak AI responses when voice mode is active
+  useEffect(() => {
+    if (autoSpeak && !isUser && message.content && !hasAutoSpoken) {
+      const plainText = message.content
+        .replace(/```[\s\S]*?```/g, 'Code block.')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/#{1,6}\s/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+      speak(plainText);
+      setHasAutoSpoken(true);
+    }
+  }, [autoSpeak, isUser, message.content, hasAutoSpoken, speak]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -24,7 +42,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (isSpeaking) {
       stopSpeaking();
     } else {
-      // Strip markdown formatting for better TTS
       const plainText = message.content
         .replace(/```[\s\S]*?```/g, 'Code block.')
         .replace(/`([^`]+)`/g, '$1')
@@ -35,30 +52,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       speak(plainText);
     }
   };
-
-  // Simple code block detection and formatting
-  const formatContent = (content: string) => {
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-    const parts: (string | { lang: string; code: string })[] = [];
-    let lastIndex = 0;
-    let match;
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(content.slice(lastIndex, match.index));
-      }
-      parts.push({ lang: match[1] || 'code', code: match[2].trim() });
-      lastIndex = match.index + match[0].length;
-    }
-
-    if (lastIndex < content.length) {
-      parts.push(content.slice(lastIndex));
-    }
-
-    return parts.length > 0 ? parts : [content];
-  };
-
-  const formattedContent = formatContent(message.content);
 
   return (
     <div
@@ -98,30 +91,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               : "glass rounded-tl-sm"
           )}
         >
-          <div className="prose prose-sm prose-invert max-w-none">
-            {formattedContent.map((part, i) => {
-              if (typeof part === 'string') {
-                return (
-                  <p key={i} className="whitespace-pre-wrap m-0 leading-relaxed">
-                    {part}
-                  </p>
-                );
-              } else {
-                return (
-                  <div key={i} className="my-3 rounded-lg overflow-hidden bg-background/50 border border-border/50">
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-secondary/50 border-b border-border/50">
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {part.lang}
-                      </span>
-                    </div>
-                    <pre className="p-3 overflow-x-auto">
-                      <code className="text-sm font-mono">{part.code}</code>
-                    </pre>
-                  </div>
-                );
-              }
-            })}
-          </div>
+          {isUser ? (
+            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          ) : (
+            <MarkdownRenderer content={message.content} />
+          )}
 
           {/* Generated Image */}
           {message.imageUrl && (

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, MicOff, Square, Image, X, FileText, ImageIcon } from 'lucide-react';
+import { Send, Paperclip, Mic, MicOff, Square, Image, X, FileText, Phone, PhoneOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useVoice } from '@/hooks/useVoice';
@@ -11,14 +11,22 @@ interface ChatInputProps {
   onFileUpload?: (file: File) => Promise<string | null>;
   isLoading: boolean;
   onStop?: () => void;
+  
 }
 
-export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoading, onStop }: ChatInputProps) {
+export function ChatInput({ 
+  onSendMessage, 
+  onGenerateImage, 
+  onFileUpload, 
+  isLoading, 
+  onStop
+}: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [showImagePrompt, setShowImagePrompt] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [voiceChatMode, setVoiceChatMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { 
@@ -45,6 +53,23 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
     }
   }, [transcript]);
 
+  // Auto-send when voice chat mode is active and user stops speaking
+  useEffect(() => {
+    if (voiceChatMode && !isListening && transcript && transcript.trim()) {
+      // Small delay to ensure final transcript is captured
+      const timer = setTimeout(() => {
+        onSendMessage(transcript.trim());
+        setMessage('');
+        setTranscript('');
+        // Restart listening for continuous conversation
+        setTimeout(() => {
+          startListening();
+        }, 500);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isListening, transcript, voiceChatMode, onSendMessage, setTranscript, startListening]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((message.trim() || uploadedFile) && !isLoading) {
@@ -69,13 +94,11 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error('File too large. Maximum size is 10MB.');
         return;
       }
       
-      // Check file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
       if (!allowedTypes.includes(file.type)) {
         toast.error('Unsupported file type. Please upload an image or PDF.');
@@ -84,7 +107,6 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
 
       setUploadedFile(file);
       
-      // Create preview for images
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -117,6 +139,19 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
       stopListening();
     } else {
       startListening();
+    }
+  };
+
+  const toggleVoiceChatMode = () => {
+    const newMode = !voiceChatMode;
+    setVoiceChatMode(newMode);
+    
+    if (newMode) {
+      toast.success('Voice chat mode activated! Speak to chat.');
+      startListening();
+    } else {
+      stopListening();
+      toast.info('Voice chat mode deactivated.');
     }
   };
 
@@ -155,7 +190,7 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
           </div>
         )}
 
-        {/* Mode indicator */}
+        {/* Mode indicators */}
         {showImagePrompt && (
           <div className="mb-2 flex items-center gap-2 text-sm text-primary">
             <Image className="w-4 h-4" />
@@ -169,10 +204,18 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
             </button>
           </div>
         )}
+
+        {voiceChatMode && (
+          <div className="mb-2 flex items-center gap-2 text-sm text-primary animate-pulse">
+            <Phone className="w-4 h-4" />
+            <span>Voice chat active - {isListening ? 'Listening...' : 'Processing...'}</span>
+          </div>
+        )}
         
         <div className={cn(
           "glass rounded-2xl p-2 flex items-end gap-2 glow-sm",
-          isListening && "ring-2 ring-primary ring-opacity-50"
+          isListening && "ring-2 ring-primary ring-opacity-50",
+          voiceChatMode && "ring-2 ring-green-500 ring-opacity-50"
         )}>
           {/* Hidden file input */}
           <input
@@ -225,13 +268,41 @@ export function ChatInput({ onSendMessage, onGenerateImage, onFileUpload, isLoad
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={showImagePrompt ? "Describe the image you want to generate..." : "Message EgreedAI..."}
+            placeholder={
+              voiceChatMode 
+                ? "Voice chat active - speak or type..." 
+                : showImagePrompt 
+                  ? "Describe the image you want to generate..." 
+                  : "Message EgreedAI..."
+            }
             className="flex-1 bg-transparent border-0 outline-none resize-none text-foreground placeholder:text-muted-foreground py-2.5 px-2 min-h-[44px] max-h-[200px] scrollbar-thin"
             rows={1}
             disabled={isLoading}
           />
 
-          {/* Voice Button */}
+          {/* Voice Chat Mode Toggle */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "w-10 h-10 flex-shrink-0 transition-all",
+              voiceChatMode 
+                ? "text-green-500 bg-green-500/10" 
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            disabled={isLoading}
+            onClick={toggleVoiceChatMode}
+            title={voiceChatMode ? "End voice chat" : "Start voice chat"}
+          >
+            {voiceChatMode ? (
+              <PhoneOff className="w-5 h-5" />
+            ) : (
+              <Phone className="w-5 h-5" />
+            )}
+          </Button>
+
+          {/* Voice Input Button */}
           <Button
             type="button"
             variant="ghost"

@@ -1,14 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Message } from '@/types/chat';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ChatInput } from './ChatInput';
-import { Menu, Moon, Sun, LogIn, LogOut, User } from 'lucide-react';
+import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { exportToText, exportToPDF } from '@/utils/exportChat';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ChatAreaProps {
   messages: Message[];
@@ -18,6 +25,7 @@ interface ChatAreaProps {
   onFileUpload?: (file: File) => Promise<string | null>;
   onStop?: () => void;
   onToggleSidebar: () => void;
+  voiceModeActive?: boolean;
 }
 
 export function ChatArea({
@@ -28,6 +36,7 @@ export function ChatArea({
   onFileUpload,
   onStop,
   onToggleSidebar,
+  voiceModeActive = false,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
@@ -45,6 +54,20 @@ export function ChatArea({
     } else {
       navigate('/auth');
     }
+  };
+
+  const handleExportText = () => {
+    const title = messages.length > 0 
+      ? messages[0].content.substring(0, 30) 
+      : 'Chat Export';
+    exportToText(messages, title);
+  };
+
+  const handleExportPDF = () => {
+    const title = messages.length > 0 
+      ? messages[0].content.substring(0, 30) 
+      : 'Chat Export';
+    exportToPDF(messages, title);
   };
 
   return (
@@ -67,6 +90,32 @@ export function ChatArea({
             {user ? `Signed in as ${user.email}` : `${messages.length} messages`}
           </p>
         </div>
+
+        {/* Export Button */}
+        {messages.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="transition-all duration-300 hover:bg-primary/10"
+                title="Export chat"
+              >
+                <Download className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportText}>
+                <FileText className="w-4 h-4 mr-2" />
+                Export as Text
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPDF}>
+                <File className="w-4 h-4 mr-2" />
+                Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         
         {/* Theme Toggle */}
         <Button
@@ -105,8 +154,12 @@ export function ChatArea({
           <WelcomeScreen onPromptClick={onSendMessage} />
         ) : (
           <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+            {messages.map((message, index) => (
+              <MessageBubble 
+                key={message.id} 
+                message={message} 
+                autoSpeak={voiceModeActive && index === messages.length - 1}
+              />
             ))}
             {isLoading && <TypingIndicator />}
             <div ref={messagesEndRef} />
