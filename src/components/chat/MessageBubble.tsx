@@ -1,8 +1,9 @@
-import { User, Sparkles, Copy, Check } from 'lucide-react';
+import { User, Sparkles, Copy, Check, Volume2, VolumeX } from 'lucide-react';
 import { Message } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useVoice } from '@/hooks/useVoice';
 
 interface MessageBubbleProps {
   message: Message;
@@ -11,11 +12,28 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
+  const { speak, stopSpeaking, isSpeaking } = useVoice();
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSpeak = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+    } else {
+      // Strip markdown formatting for better TTS
+      const plainText = message.content
+        .replace(/```[\s\S]*?```/g, 'Code block.')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/#{1,6}\s/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+      speak(plainText);
+    }
   };
 
   // Simple code block detection and formatting
@@ -104,6 +122,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               }
             })}
           </div>
+
+          {/* Generated Image */}
+          {message.imageUrl && (
+            <div className="mt-3">
+              <img 
+                src={message.imageUrl} 
+                alt="Generated image" 
+                className="rounded-lg max-w-full h-auto border border-border/30"
+              />
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -119,6 +148,24 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 <Check className="w-3.5 h-3.5 text-primary" />
               ) : (
                 <Copy className="w-3.5 h-3.5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "w-7 h-7",
+                isSpeaking 
+                  ? "text-primary" 
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              onClick={handleSpeak}
+              title={isSpeaking ? "Stop speaking" : "Read aloud"}
+            >
+              {isSpeaking ? (
+                <VolumeX className="w-3.5 h-3.5" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5" />
               )}
             </Button>
           </div>
