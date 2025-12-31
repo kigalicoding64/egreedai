@@ -16,6 +16,7 @@ const Index = () => {
     deleteConversation,
     sendMessage,
     generateImage,
+    uploadFile,
     stopGeneration,
   } = useChat();
 
@@ -51,6 +52,7 @@ const Index = () => {
         isLoading={isLoading}
         onSendMessage={sendMessage}
         onGenerateImage={generateImage}
+        onFileUpload={uploadFile}
         onStop={stopGeneration}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
       />
