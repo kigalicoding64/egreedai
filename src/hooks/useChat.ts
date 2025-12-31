@@ -464,6 +464,42 @@ export function useChat() {
     }
   }, [activeConversationId, isAuthenticated, user, toast]);
 
+  const uploadFile = useCallback(async (file: File): Promise<string | null> => {
+    if (!isAuthenticated || !user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to upload files",
+        variant: "destructive"
+      });
+      return null;
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${generateId()}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from('chat-uploads')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('chat-uploads')
+        .getPublicUrl(data.path);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: "Upload failed",
+        description: (error as Error).message,
+        variant: "destructive"
+      });
+      return null;
+    }
+  }, [isAuthenticated, user, toast]);
+
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -481,6 +517,7 @@ export function useChat() {
     deleteConversation,
     sendMessage,
     generateImage,
+    uploadFile,
     stopGeneration,
   };
 }
