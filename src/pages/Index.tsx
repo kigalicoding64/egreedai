@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [voiceModeActive, setVoiceModeActive] = useState(false);
+  
   const {
     conversations,
     activeConversation,
@@ -55,6 +57,7 @@ const Index = () => {
         onFileUpload={uploadFile}
         onStop={stopGeneration}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        voiceModeActive={voiceModeActive}
       />
     </div>
   );
