@@ -54,10 +54,31 @@ export function useVoice() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [language, setLanguage] = useState('en-US');
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const { toast } = useToast();
 
-  const startListening = useCallback(() => {
+  // Language code mapping for speech recognition
+  const getRecognitionLanguage = (langCode: string): string => {
+    const langMap: Record<string, string> = {
+      'en': 'en-US',
+      'rw': 'rw-RW', // Kinyarwanda
+      'fr': 'fr-FR',
+      'sw': 'sw-KE', // Swahili
+      'es': 'es-ES',
+      'pt': 'pt-PT',
+      'de': 'de-DE',
+      'zh': 'zh-CN',
+      'ar': 'ar-SA',
+      'hi': 'hi-IN',
+      'ja': 'ja-JP',
+      'ko': 'ko-KR',
+      'ru': 'ru-RU',
+    };
+    return langMap[langCode] || langCode;
+  };
+
+  const startListening = useCallback((langCode?: string) => {
     if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
       toast({
         title: "Voice not supported",
@@ -72,9 +93,9 @@ export function useVoice() {
     
     const recognition = new SpeechRecognitionClass();
     
-    recognition.continuous = false;
+    recognition.continuous = true; // Keep listening continuously
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = langCode ? getRecognitionLanguage(langCode) : language;
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -82,22 +103,34 @@ export function useVoice() {
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const current = event.resultIndex;
-      const result = event.results[current];
-      const transcriptText = result[0].transcript;
-      setTranscript(transcriptText);
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      setTranscript(finalTranscript || interimTranscript);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
-      setIsListening(false);
       
       if (event.error === 'not-allowed') {
+        setIsListening(false);
         toast({
           title: "Microphone access denied",
           description: "Please allow microphone access to use voice input.",
           variant: "destructive"
         });
+      } else if (event.error !== 'aborted') {
+        // Don't show error for intentional stops
+        console.log('Recognition error:', event.error);
       }
     };
 
@@ -107,7 +140,7 @@ export function useVoice() {
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [toast]);
+  }, [toast, language]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -116,7 +149,7 @@ export function useVoice() {
     }
   }, []);
 
-  const speak = useCallback((text: string) => {
+  const speak = useCallback((text: string, langCode?: string) => {
     if (!('speechSynthesis' in window)) {
       toast({
         title: "Speech not supported",
@@ -129,21 +162,47 @@ export function useVoice() {
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    // Clean the text (remove markdown, code blocks, etc.)
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, 'code block')
+      .replace(/`[^`]+`/g, 'code')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, 'image')
+      .replace(/<[^>]+>/g, '')
+      .slice(0, 3000); // Limit length for TTS
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 1;
     utterance.pitch = 1;
     utterance.volume = 1;
 
-    // Try to use a natural sounding voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => 
-      v.name.includes('Google') || 
-      v.name.includes('Natural') || 
-      v.name.includes('Samantha')
-    ) || voices[0];
-    
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    // Set language
+    if (langCode) {
+      utterance.lang = getRecognitionLanguage(langCode);
+    }
+
+    // Wait for voices to load
+    const setVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const targetLang = langCode ? getRecognitionLanguage(langCode) : language;
+      
+      // Try to find a voice for the target language
+      const preferredVoice = voices.find(v => v.lang.startsWith(targetLang.split('-')[0])) ||
+        voices.find(v => v.name.includes('Google') || v.name.includes('Natural')) ||
+        voices[0];
+      
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+    };
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+      setVoice();
+    } else {
+      window.speechSynthesis.onvoiceschanged = setVoice;
     }
 
     utterance.onstart = () => setIsSpeaking(true);
@@ -151,21 +210,27 @@ export function useVoice() {
     utterance.onerror = () => setIsSpeaking(false);
 
     window.speechSynthesis.speak(utterance);
-  }, [toast]);
+  }, [toast, language]);
 
   const stopSpeaking = useCallback(() => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
   }, []);
 
+  const changeLanguage = useCallback((langCode: string) => {
+    setLanguage(getRecognitionLanguage(langCode));
+  }, []);
+
   return {
     isListening,
     isSpeaking,
     transcript,
+    language,
     startListening,
     stopListening,
     speak,
     stopSpeaking,
-    setTranscript
+    setTranscript,
+    changeLanguage
   };
 }

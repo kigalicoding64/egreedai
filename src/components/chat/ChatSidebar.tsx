@@ -1,7 +1,9 @@
-import { Plus, MessageSquare, Trash2, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, MessageSquare, Trash2, Sparkles, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Conversation } from '@/types/chat';
 import { cn } from '@/lib/utils';
+import { ConversationSearch } from './ConversationSearch';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -18,8 +20,19 @@ export function ChatSidebar({
   onSelectConversation,
   onDeleteConversation,
 }: ChatSidebarProps) {
+  const [showSearch, setShowSearch] = useState(false);
+
   return (
-    <aside className="w-72 h-full flex flex-col glass border-r border-border/50">
+    <aside className="w-72 h-full flex flex-col glass border-r border-border/50 relative">
+      {/* Search Overlay */}
+      {showSearch && (
+        <ConversationSearch
+          conversations={conversations}
+          onSelectConversation={onSelectConversation}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+
       {/* Logo */}
       <div className="p-4 border-b border-border/50">
         <div className="flex items-center gap-3">
@@ -33,15 +46,24 @@ export function ChatSidebar({
         </div>
       </div>
 
-      {/* New Chat Button */}
-      <div className="p-3">
+      {/* Action Buttons */}
+      <div className="p-3 flex gap-2">
         <Button
           onClick={onNewChat}
-          className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 hover:border-primary/50 transition-all duration-300"
+          className="flex-1 justify-start gap-2 bg-primary/10 hover:bg-primary/20 text-foreground border border-primary/30 hover:border-primary/50 transition-all duration-300"
           variant="outline"
         >
           <Plus className="w-4 h-4" />
           New Chat
+        </Button>
+        <Button
+          onClick={() => setShowSearch(true)}
+          variant="outline"
+          size="icon"
+          className="bg-secondary/50 hover:bg-secondary border-border/50"
+          title="Search conversations"
+        >
+          <Search className="w-4 h-4" />
         </Button>
       </div>
 
