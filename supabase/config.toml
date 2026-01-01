@@ -1,1 +1,16 @@
 project_id = "vvyhsljwwsubjcsmtcrq"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.generate-image]
+verify_jwt = false
+
+[functions.text-to-speech]
+verify_jwt = false
+
+[functions.web-search]
+verify_jwt = false
+
+[functions.generate-video]
+verify_jwt = false

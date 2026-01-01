@@ -3,10 +3,12 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
 import { useChat } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
+import { Language, SUPPORTED_LANGUAGES } from '@/components/chat/LanguageSelector';
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [voiceModeActive, setVoiceModeActive] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>(SUPPORTED_LANGUAGES[0]);
   
   const {
     conversations,
@@ -24,7 +26,6 @@ const Index = () => {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background gradient-bg">
-      {/* Sidebar */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 lg:relative lg:z-0 transition-transform duration-300",
@@ -40,7 +41,6 @@ const Index = () => {
         />
       </div>
 
-      {/* Overlay for mobile */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
@@ -48,7 +48,6 @@ const Index = () => {
         />
       )}
 
-      {/* Main Chat Area */}
       <ChatArea
         messages={activeConversation?.messages || []}
         isLoading={isLoading}
@@ -58,6 +57,8 @@ const Index = () => {
         onStop={stopGeneration}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         voiceModeActive={voiceModeActive}
+        selectedLanguage={selectedLanguage}
+        onLanguageChange={setSelectedLanguage}
       />
     </div>
   );
