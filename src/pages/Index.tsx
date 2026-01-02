@@ -15,6 +15,7 @@ const Index = () => {
     activeConversation,
     activeConversationId,
     isLoading,
+    isSearching,
     createNewChat,
     selectConversation,
     deleteConversation,
@@ -51,6 +52,7 @@ const Index = () => {
       <ChatArea
         messages={activeConversation?.messages || []}
         isLoading={isLoading}
+        isSearching={isSearching}
         onSendMessage={sendMessage}
         onGenerateImage={generateImage}
         onFileUpload={uploadFile}

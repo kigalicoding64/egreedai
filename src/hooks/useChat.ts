@@ -3,6 +3,7 @@ import { Message, Conversation } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -11,14 +12,46 @@ const generateTitle = (content: string) => {
 };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-
+const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Perform web search
+  const performWebSearch = async (query: string, language: string = 'en'): Promise<string | null> => {
+    try {
+      setIsSearching(true);
+      const response = await fetch(WEB_SEARCH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ query, language }),
+      });
+
+      if (!response.ok) {
+        console.error('Web search failed');
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.success && data.answer) {
+        return formatSearchResults(data.answer, data.sources || []);
+      }
+      return null;
+    } catch (error) {
+      console.error('Web search error:', error);
+      return null;
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
@@ -210,6 +243,22 @@ export function useChat() {
         { role: 'user' as const, content }
       ];
 
+      // Check if we should trigger a web search
+      const searchDecision = shouldTriggerWebSearch(content);
+      let webSearchContext = '';
+
+      if (searchDecision.shouldSearch) {
+        const searchResult = await performWebSearch(content);
+        if (searchResult) {
+          webSearchContext = `\n\n[Web Search Results]:\n${searchResult}\n\nPlease use the above search results to provide an accurate and up-to-date response.`;
+        }
+      }
+
+      // Add web search context to messages if available
+      const messagesWithContext = webSearchContext
+        ? [...messagesForApi.slice(0, -1), { role: 'user' as const, content: content + webSearchContext }]
+        : messagesForApi;
+
       // Generate AI response with streaming
       setIsLoading(true);
       abortControllerRef.current = new AbortController();
@@ -223,7 +272,7 @@ export function useChat() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ messages: messagesForApi }),
+          body: JSON.stringify({ messages: messagesWithContext }),
           signal: abortControllerRef.current.signal
         });
 
@@ -512,6 +561,7 @@ export function useChat() {
     activeConversation,
     activeConversationId,
     isLoading,
+    isSearching,
     createNewChat,
     selectConversation,
     deleteConversation,
@@ -519,5 +569,6 @@ export function useChat() {
     generateImage,
     uploadFile,
     stopGeneration,
+    performWebSearch,
   };
 }
