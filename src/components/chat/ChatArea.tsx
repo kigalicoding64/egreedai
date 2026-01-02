@@ -6,7 +6,8 @@ import { WelcomeScreen } from './WelcomeScreen';
 import { ChatInput } from './ChatInput';
 import { VideoGenerator } from './VideoGenerator';
 import { LanguageSelector, Language, SUPPORTED_LANGUAGES } from './LanguageSelector';
-import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video } from 'lucide-react';
+import { WebSearchIndicator } from './WebSearchIndicator';
+import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +24,7 @@ import {
 interface ChatAreaProps {
   messages: Message[];
   isLoading: boolean;
+  isSearching?: boolean;
   onSendMessage: (message: string, imageUrl?: string) => void;
   onGenerateImage: (prompt: string) => Promise<void>;
   onFileUpload?: (file: File) => Promise<string | null>;
@@ -36,6 +38,7 @@ interface ChatAreaProps {
 export function ChatArea({
   messages,
   isLoading,
+  isSearching = false,
   onSendMessage,
   onGenerateImage,
   onFileUpload,
@@ -140,10 +143,25 @@ export function ChatArea({
           {theme === 'dark' ? <Sun className="w-5 h-5 text-muted-foreground" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
         </Button>
 
+        {user && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate('/settings')} 
+            className="transition-all duration-300 hover:bg-primary/10"
+            title="Settings"
+          >
+            <Settings className="w-5 h-5 text-muted-foreground" />
+          </Button>
+        )}
+
         <Button variant="ghost" size="icon" onClick={handleAuthClick} className="transition-all duration-300 hover:bg-primary/10" title={user ? 'Sign out' : 'Sign in'}>
           {user ? <LogOut className="w-5 h-5 text-muted-foreground" /> : <LogIn className="w-5 h-5 text-muted-foreground" />}
         </Button>
       </header>
+
+      {/* Web Search Indicator */}
+      {isSearching && <WebSearchIndicator isSearching={true} />}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">

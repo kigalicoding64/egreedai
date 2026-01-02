@@ -100,6 +100,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          conversation_history_enabled: boolean
+          conversation_retention_days: number
+          created_at: string
+          id: string
+          language_code: string
+          language_name: string
+          updated_at: string
+          user_id: string
+          voice_auto_speak: boolean
+          voice_enabled: boolean
+          voice_speed: number
+        }
+        Insert: {
+          conversation_history_enabled?: boolean
+          conversation_retention_days?: number
+          created_at?: string
+          id?: string
+          language_code?: string
+          language_name?: string
+          updated_at?: string
+          user_id: string
+          voice_auto_speak?: boolean
+          voice_enabled?: boolean
+          voice_speed?: number
+        }
+        Update: {
+          conversation_history_enabled?: boolean
+          conversation_retention_days?: number
+          created_at?: string
+          id?: string
+          language_code?: string
+          language_name?: string
+          updated_at?: string
+          user_id?: string
+          voice_auto_speak?: boolean
+          voice_enabled?: boolean
+          voice_speed?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
