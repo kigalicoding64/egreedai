@@ -7,7 +7,7 @@ import { ChatInput } from './ChatInput';
 import { VideoGenerator } from './VideoGenerator';
 import { LanguageSelector, Language, SUPPORTED_LANGUAGES } from './LanguageSelector';
 import { WebSearchIndicator } from './WebSearchIndicator';
-import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings } from 'lucide-react';
+import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
@@ -102,6 +102,16 @@ export function ChatArea({
             {user ? `Signed in as ${user.email}` : `${messages.length} messages`}
           </p>
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/builder')}
+          className="transition-all duration-300 hover:bg-primary/10"
+          title="No-Code Builder"
+        >
+          <Code2 className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+        </Button>
 
         <Button
           variant="ghost"
