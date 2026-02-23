@@ -50,7 +50,6 @@ export function VideoGenerator({ onClose, onVideoGenerated, uploadedFiles = [] }
     setIsGenerating(true);
 
     try {
-      // Use the generate-video edge function
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`,
         {
@@ -254,7 +253,7 @@ export function VideoGenerator({ onClose, onVideoGenerated, uploadedFiles = [] }
             {isGenerating ? (
               <>
                 <Sparkles className="w-5 h-5 animate-spin" />
-                Generating Video...
+                Generating... (~10s)
               </>
             ) : (
               <>
@@ -265,7 +264,7 @@ export function VideoGenerator({ onClose, onVideoGenerated, uploadedFiles = [] }
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            Video generation may take 30-60 seconds depending on duration
+            Powered by Lovable Cloud AI — generates in ~10 seconds
           </p>
         </div>
       </div>
