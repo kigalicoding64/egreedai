@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatArea } from '@/components/chat/ChatArea';
 import { useChat } from '@/hooks/useChat';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { cn } from '@/lib/utils';
 import { Language, SUPPORTED_LANGUAGES } from '@/components/chat/LanguageSelector';
 
@@ -9,6 +10,7 @@ const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [voiceModeActive, setVoiceModeActive] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(SUPPORTED_LANGUAGES[0]);
+  const searchTriggerRef = useRef<(() => void) | null>(null);
   
   const {
     conversations,
@@ -25,6 +27,13 @@ const Index = () => {
     stopGeneration,
   } = useChat();
 
+  useKeyboardShortcuts({
+    onNewChat: createNewChat,
+    onSearch: useCallback(() => searchTriggerRef.current?.(), []),
+    onToggleVoice: useCallback(() => setVoiceModeActive(v => !v), []),
+    onToggleSidebar: useCallback(() => setSidebarOpen(v => !v), []),
+  });
+
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background gradient-bg">
       <div
@@ -39,6 +48,7 @@ const Index = () => {
           onNewChat={createNewChat}
           onSelectConversation={selectConversation}
           onDeleteConversation={deleteConversation}
+          onSearchTrigger={(fn) => { searchTriggerRef.current = fn; }}
         />
       </div>
 
