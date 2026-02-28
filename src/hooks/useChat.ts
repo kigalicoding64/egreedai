@@ -11,7 +11,6 @@ const generateTitle = (content: string) => {
   return content.length > 40 ? content.substring(0, 40) + '...' : content;
 };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -259,35 +258,13 @@ export function useChat() {
         ? [...messagesForApi.slice(0, -1), { role: 'user' as const, content: content + webSearchContext }]
         : messagesForApi;
 
-      // Generate AI response with streaming
+      // Generate AI response with Puter.js streaming
       setIsLoading(true);
       abortControllerRef.current = new AbortController();
 
       let assistantContent = '';
 
       try {
-        const resp = await fetch(CHAT_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ messages: messagesWithContext }),
-          signal: abortControllerRef.current.signal
-        });
-
-        if (!resp.ok) {
-          const errorData = await resp.json();
-          throw new Error(errorData.error || 'Failed to get response');
-        }
-
-        if (!resp.body) throw new Error('No response body');
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let textBuffer = '';
-        let streamDone = false;
-
         // Create initial assistant message
         const aiMessageId = generateId();
         
@@ -309,53 +286,42 @@ export function useChat() {
           })
         );
 
-        while (!streamDone) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          textBuffer += decoder.decode(value, { stream: true });
+        // Build messages array for Puter.js
+        const puterMessages = [
+          { 
+            role: 'system', 
+            content: `You are EgreedAI, a highly advanced AI assistant. You are extremely knowledgeable, excellent at coding, creative, and helpful. Always provide well-structured responses with markdown formatting.` 
+          },
+          ...messagesWithContext.map(m => ({ role: m.role, content: m.content }))
+        ];
 
-          let newlineIndex: number;
-          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-            let line = textBuffer.slice(0, newlineIndex);
-            textBuffer = textBuffer.slice(newlineIndex + 1);
+        // Use Puter.js streaming
+        const resp = await puter.ai.chat(puterMessages, { 
+          model: 'gpt-4o-mini', 
+          stream: true 
+        });
 
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            if (line.startsWith(':') || line.trim() === '') continue;
-            if (!line.startsWith('data: ')) continue;
-
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === '[DONE]') {
-              streamDone = true;
-              break;
-            }
-
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const deltaContent = parsed.choices?.[0]?.delta?.content as string | undefined;
-              if (deltaContent) {
-                assistantContent += deltaContent;
-                
-                setConversations((prev) =>
-                  prev.map((c) => {
-                    if (c.id === conversationId) {
-                      return {
-                        ...c,
-                        messages: c.messages.map((m, i) => 
-                          i === c.messages.length - 1 
-                            ? { ...m, content: assistantContent }
-                            : m
-                        ),
-                        updatedAt: new Date(),
-                      };
-                    }
-                    return c;
-                  })
-                );
-              }
-            } catch {
-              textBuffer = line + '\n' + textBuffer;
-              break;
-            }
+        for await (const part of resp) {
+          if (abortControllerRef.current?.signal.aborted) break;
+          const text = part?.text || '';
+          if (text) {
+            assistantContent += text;
+            setConversations((prev) =>
+              prev.map((c) => {
+                if (c.id === conversationId) {
+                  return {
+                    ...c,
+                    messages: c.messages.map((m, i) => 
+                      i === c.messages.length - 1 
+                        ? { ...m, content: assistantContent }
+                        : m
+                    ),
+                    updatedAt: new Date(),
+                  };
+                }
+                return c;
+              })
+            );
           }
         }
 
@@ -445,31 +411,15 @@ export function useChat() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ prompt }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate image');
-      }
-
-      const data = await response.json();
+      const image = await puter.ai.txt2img(prompt, false);
+      const imageUrl = image.src;
       
       const aiMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: data.text || 'Here is your generated image!',
+        content: 'Here is your generated image!',
         timestamp: new Date(),
-        imageUrl: data.imageUrl
+        imageUrl
       };
 
       setConversations((prev) =>
