@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, MessageSquare, Trash2, Sparkles, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Conversation } from '@/types/chat';
@@ -11,6 +11,7 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onSearchTrigger?: (fn: () => void) => void;
 }
 
 export function ChatSidebar({
@@ -19,8 +20,13 @@ export function ChatSidebar({
   onNewChat,
   onSelectConversation,
   onDeleteConversation,
+  onSearchTrigger,
 }: ChatSidebarProps) {
   const [showSearch, setShowSearch] = useState(false);
+
+  useEffect(() => {
+    onSearchTrigger?.(() => setShowSearch(true));
+  }, [onSearchTrigger]);
 
   return (
     <aside className="w-72 h-full flex flex-col glass border-r border-border/50 relative">
@@ -55,13 +61,14 @@ export function ChatSidebar({
         >
           <Plus className="w-4 h-4" />
           New Chat
+          <span className="ml-auto text-[10px] text-muted-foreground opacity-60">⌘⇧N</span>
         </Button>
         <Button
           onClick={() => setShowSearch(true)}
           variant="outline"
           size="icon"
           className="bg-secondary/50 hover:bg-secondary border-border/50"
-          title="Search conversations"
+          title="Search conversations (⌘K)"
         >
           <Search className="w-4 h-4" />
         </Button>
