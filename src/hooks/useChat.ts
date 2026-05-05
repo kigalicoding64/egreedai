@@ -279,74 +279,78 @@ export function useChat() {
         ? [...messagesForApi.slice(0, -1), { role: 'user' as const, content: content + webSearchContext }]
         : messagesForApi;
 
-      // Generate AI response with Puter.js streaming
+      // Generate AI response via SSE streaming
       setIsLoading(true);
-      abortControllerRef.current = new AbortController();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       let assistantContent = '';
+      const aiMessageId = generateId();
+
+      setConversations((prev) =>
+        prev.map((c) => c.id === conversationId
+          ? { ...c, messages: [...c.messages, { id: aiMessageId, role: 'assistant' as const, content: '', timestamp: new Date() }], updatedAt: new Date() }
+          : c)
+      );
+
+      const updateLast = (text: string) => {
+        setConversations((prev) =>
+          prev.map((c) => c.id === conversationId
+            ? { ...c, messages: c.messages.map((m, i) => i === c.messages.length - 1 ? { ...m, content: text } : m), updatedAt: new Date() }
+            : c)
+        );
+      };
 
       try {
-        // Create initial assistant message
-        const aiMessageId = generateId();
-        
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id === conversationId) {
-              return {
-                ...c,
-                messages: [...c.messages, {
-                  id: aiMessageId,
-                  role: 'assistant' as const,
-                  content: '',
-                  timestamp: new Date()
-                }],
-                updatedAt: new Date(),
-              };
-            }
-            return c;
-          })
-        );
-
-        // Build messages array for Puter.js
-        const puterMessages = [
-          { 
-            role: 'system', 
-            content: `You are EgreedAI, a highly advanced AI assistant. You are extremely knowledgeable, excellent at coding, creative, and helpful. Always provide well-structured responses with markdown formatting.` 
+        const { data: { session } } = await supabase.auth.getSession();
+        const resp = await fetch(CHAT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          ...messagesWithContext.map(m => ({ role: m.role, content: m.content }))
-        ];
-
-        // Use Puter.js streaming
-        const resp = await puter.ai.chat(puterMessages, { 
-          model: 'gpt-4o-mini', 
-          stream: true 
+          body: JSON.stringify({
+            messages: messagesWithContext,
+            variant: modelId,
+            useKnowledge,
+          }),
+          signal: controller.signal,
         });
 
-        for await (const part of resp) {
-          if (abortControllerRef.current?.signal.aborted) break;
-          const text = part?.text || '';
-          if (text) {
-            assistantContent += text;
-            setConversations((prev) =>
-              prev.map((c) => {
-                if (c.id === conversationId) {
-                  return {
-                    ...c,
-                    messages: c.messages.map((m, i) => 
-                      i === c.messages.length - 1 
-                        ? { ...m, content: assistantContent }
-                        : m
-                    ),
-                    updatedAt: new Date(),
-                  };
-                }
-                return c;
-              })
-            );
+        if (!resp.ok) {
+          if (resp.status === 429) throw new Error('Rate limit exceeded — try again shortly.');
+          if (resp.status === 402) throw new Error('AI credits exhausted. Add credits to continue.');
+          throw new Error('AI request failed');
+        }
+        if (!resp.body) throw new Error('No response stream');
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let done = false;
+        while (!done) {
+          const { done: d, value } = await reader.read();
+          if (d) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf('\n')) !== -1) {
+            let line = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 1);
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (!line.startsWith('data: ')) continue;
+            const json = line.slice(6).trim();
+            if (json === '[DONE]') { done = true; break; }
+            try {
+              const parsed = JSON.parse(json);
+              const delta = parsed.choices?.[0]?.delta?.content;
+              if (delta) { assistantContent += delta; updateLast(assistantContent); }
+            } catch {
+              buffer = line + '\n' + buffer;
+              break;
+            }
           }
         }
 
-        // Save assistant message to database
         if (isAuthenticated && user && assistantContent) {
           await supabase.from('messages').insert({
             conversation_id: conversationId,
@@ -370,7 +374,7 @@ export function useChat() {
         abortControllerRef.current = null;
       }
     },
-    [activeConversationId, conversations, isAuthenticated, user, toast]
+    [activeConversationId, conversations, isAuthenticated, user, toast, modelId, useKnowledge]
   );
 
   const generateImage = useCallback(async (prompt: string) => {
