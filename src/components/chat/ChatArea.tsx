@@ -113,6 +113,32 @@ export function ChatArea({
           </p>
         </div>
 
+        {onSelectModel && (
+          <ModelSelector selectedId={modelId} onSelect={onSelectModel} />
+        )}
+
+        {onToggleKnowledge && (
+          <Toggle
+            pressed={useKnowledge}
+            onPressedChange={onToggleKnowledge}
+            size="sm"
+            title="Use my Knowledge Base"
+            aria-label="Use Knowledge Base"
+          >
+            <BookOpen className="w-4 h-4" />
+          </Toggle>
+        )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/knowledge')}
+          className="transition-all duration-300 hover:bg-primary/10"
+          title="Manage Knowledge Base"
+        >
+          <BookOpen className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+        </Button>
+
         <Button
           variant="ghost"
           size="icon"
