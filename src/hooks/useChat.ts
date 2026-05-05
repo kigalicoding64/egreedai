@@ -12,14 +12,35 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const IMAGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`;
+
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [modelId, setModelId] = useState<string>(() =>
+    localStorage.getItem('egreed_model') || 'egreed-fast'
+  );
+  const [useKnowledge, setUseKnowledge] = useState<boolean>(() =>
+    localStorage.getItem('egreed_use_kb') === '1'
+  );
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const selectModel = useCallback((id: string) => {
+    setModelId(id);
+    localStorage.setItem('egreed_model', id);
+  }, []);
+  const toggleKnowledge = useCallback(() => {
+    setUseKnowledge((v) => {
+      const n = !v;
+      localStorage.setItem('egreed_use_kb', n ? '1' : '0');
+      return n;
+    });
+  }, []);
 
   // Perform web search
   const performWebSearch = async (query: string, language: string = 'en'): Promise<string | null> => {
