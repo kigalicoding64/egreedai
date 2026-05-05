@@ -436,9 +436,19 @@ export function useChat() {
     setIsLoading(true);
 
     try {
-      const image = await puter.ai.txt2img(prompt, false);
-      const imageUrl = image.src;
-      
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(IMAGE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.imageUrl) throw new Error(json.error || 'Image generation failed');
+      const imageUrl = json.imageUrl;
+
       const aiMessage: Message = {
         id: generateId(),
         role: 'assistant',
