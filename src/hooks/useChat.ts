@@ -555,5 +555,9 @@ export function useChat() {
     uploadFile,
     stopGeneration,
     performWebSearch,
+    modelId,
+    selectModel,
+    useKnowledge,
+    toggleKnowledge,
   };
 }
