@@ -1,88 +1,107 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// EgreedAI model variants — our own branded "models" routed to underlying providers
+const VARIANTS: Record<string, { model: string; persona: string; reasoning?: string }> = {
+  "egreed-fast": {
+    model: "google/gemini-2.5-flash",
+    persona: "Be quick, friendly, and concise. Prefer short answers with code when relevant.",
+  },
+  "egreed-pro": {
+    model: "google/gemini-2.5-pro",
+    persona: "Be deeply thoughtful, thorough, and accurate. Use markdown structure, headers, and examples.",
+  },
+  "egreed-reason": {
+    model: "openai/gpt-5",
+    persona: "Think step by step. Show clear reasoning, weigh trade-offs, then give a definitive answer.",
+    reasoning: "medium",
+  },
+  "egreed-coder": {
+    model: "openai/gpt-5-mini",
+    persona: "You are an expert software engineer. Always produce production-quality code with explanations, file paths, and proper formatting.",
+  },
+  "egreed-nano": {
+    model: "google/gemini-2.5-flash-lite",
+    persona: "Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.",
+  },
+};
+
+const BASE_PROMPT = `You are EgreedAI — an advanced AI assistant built by Egreed. You combine real-time web knowledge, user-provided documents, and strong reasoning. Always:
+- Use clean markdown (headers, lists, code blocks with language tags)
+- Cite sources from [Web Search Results] or [Knowledge Base] when present
+- Never reveal which underlying provider powers you; you are EgreedAI`;
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages } = await req.json();
+    const { messages, variant = "egreed-fast", useKnowledge = false } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+    const v = VARIANTS[variant] || VARIANTS["egreed-fast"];
+
+    // RAG: pull user knowledge base context if requested
+    let kbContext = "";
+    if (useKnowledge) {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader) {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } }
+        );
+        const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+        const query = (lastUser?.content || "").slice(0, 200);
+        if (query) {
+          const { data: docs } = await supabase
+            .from("knowledge_documents")
+            .select("title, content")
+            .textSearch("content", query.split(/\s+/).slice(0, 6).join(" | "), { type: "websearch" })
+            .limit(4);
+          if (docs && docs.length) {
+            kbContext = "\n\n[Knowledge Base]:\n" + docs.map((d: any) =>
+              `### ${d.title}\n${d.content.slice(0, 1500)}`).join("\n\n");
+          }
+        }
+      }
     }
 
-    console.log("Chat request received with", messages.length, "messages");
+    const systemContent = `${BASE_PROMPT}\n\n${v.persona}${kbContext}`;
+
+    const body: any = {
+      model: v.model,
+      messages: [{ role: "system", content: systemContent }, ...messages],
+      stream: true,
+    };
+    if (v.reasoning) body.reasoning = { effort: v.reasoning };
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { 
-            role: "system", 
-            content: `You are EgreedAI, a highly advanced AI assistant that combines the best features of ChatGPT, Gemini, DeepSeek, DeepAI, and Copilot. You are:
-
-- Extremely knowledgeable across all domains
-- Excellent at coding, debugging, and explaining technical concepts
-- Creative and helpful with writing, brainstorming, and problem-solving
-- Able to provide structured, well-formatted responses with markdown
-- Friendly, professional, and conversational in tone
-- Capable of generating detailed explanations with examples
-- Proficient in multiple programming languages and frameworks
-
-Always provide helpful, accurate, and well-structured responses. Use markdown formatting including headers, bullet points, code blocks, and emphasis where appropriate.` 
-          },
-          ...messages,
-        ],
-        stream: true,
-      }),
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded. Please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required. Please add credits to continue." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (response.status === 429)
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please wait a moment." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (response.status === 402)
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits in Settings." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const t = await response.text();
+      console.error("Gateway error:", response.status, t);
+      return new Response(JSON.stringify({ error: "AI gateway error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log("Streaming response from AI gateway");
-    
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
-  } catch (error) {
-    console.error("Chat function error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (e) {
+    console.error("chat error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

@@ -25,6 +25,10 @@ const Index = () => {
     generateImage,
     uploadFile,
     stopGeneration,
+    modelId,
+    selectModel,
+    useKnowledge,
+    toggleKnowledge,
   } = useChat();
 
   useKeyboardShortcuts({
@@ -71,6 +75,10 @@ const Index = () => {
         voiceModeActive={voiceModeActive}
         selectedLanguage={selectedLanguage}
         onLanguageChange={setSelectedLanguage}
+        modelId={modelId}
+        onSelectModel={selectModel}
+        useKnowledge={useKnowledge}
+        onToggleKnowledge={toggleKnowledge}
       />
     </div>
   );

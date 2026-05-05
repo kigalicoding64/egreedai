@@ -7,7 +7,9 @@ import { ChatInput } from './ChatInput';
 import { VideoGenerator } from './VideoGenerator';
 import { LanguageSelector, Language, SUPPORTED_LANGUAGES } from './LanguageSelector';
 import { WebSearchIndicator } from './WebSearchIndicator';
-import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings, Code2 } from 'lucide-react';
+import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings, Code2, BookOpen } from 'lucide-react';
+import { ModelSelector } from './ModelSelector';
+import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +35,10 @@ interface ChatAreaProps {
   voiceModeActive?: boolean;
   selectedLanguage?: Language;
   onLanguageChange?: (language: Language) => void;
+  modelId?: string;
+  onSelectModel?: (id: string) => void;
+  useKnowledge?: boolean;
+  onToggleKnowledge?: () => void;
 }
 
 export function ChatArea({
@@ -47,6 +53,10 @@ export function ChatArea({
   voiceModeActive = false,
   selectedLanguage = SUPPORTED_LANGUAGES[0],
   onLanguageChange,
+  modelId = 'egreed-fast',
+  onSelectModel,
+  useKnowledge = false,
+  onToggleKnowledge,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
@@ -102,6 +112,32 @@ export function ChatArea({
             {user ? `Signed in as ${user.email}` : `${messages.length} messages`}
           </p>
         </div>
+
+        {onSelectModel && (
+          <ModelSelector selectedId={modelId} onSelect={onSelectModel} />
+        )}
+
+        {onToggleKnowledge && (
+          <Toggle
+            pressed={useKnowledge}
+            onPressedChange={onToggleKnowledge}
+            size="sm"
+            title="Use my Knowledge Base"
+            aria-label="Use Knowledge Base"
+          >
+            <BookOpen className="w-4 h-4" />
+          </Toggle>
+        )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/knowledge')}
+          className="transition-all duration-300 hover:bg-primary/10"
+          title="Manage Knowledge Base"
+        >
+          <BookOpen className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+        </Button>
 
         <Button
           variant="ghost"
