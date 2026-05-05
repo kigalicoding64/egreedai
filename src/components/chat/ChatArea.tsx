@@ -7,7 +7,9 @@ import { ChatInput } from './ChatInput';
 import { VideoGenerator } from './VideoGenerator';
 import { LanguageSelector, Language, SUPPORTED_LANGUAGES } from './LanguageSelector';
 import { WebSearchIndicator } from './WebSearchIndicator';
-import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings, Code2 } from 'lucide-react';
+import { Menu, Moon, Sun, LogIn, LogOut, Download, FileText, File, Video, Settings, Code2, BookOpen } from 'lucide-react';
+import { ModelSelector } from './ModelSelector';
+import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +35,10 @@ interface ChatAreaProps {
   voiceModeActive?: boolean;
   selectedLanguage?: Language;
   onLanguageChange?: (language: Language) => void;
+  modelId?: string;
+  onSelectModel?: (id: string) => void;
+  useKnowledge?: boolean;
+  onToggleKnowledge?: () => void;
 }
 
 export function ChatArea({
@@ -47,6 +53,10 @@ export function ChatArea({
   voiceModeActive = false,
   selectedLanguage = SUPPORTED_LANGUAGES[0],
   onLanguageChange,
+  modelId = 'egreed-fast',
+  onSelectModel,
+  useKnowledge = false,
+  onToggleKnowledge,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
