@@ -94,7 +94,14 @@ serve(async (req) => {
       }
     }
 
-    const systemContent = `${BASE_PROMPT}\n\n${v.persona}${kbContext}`;
+    // Auto-inject Kinyarwanda corpus when the user writes in Kinyarwanda or asks about it
+    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+    const lastText = (lastUserMsg?.content || "").toString();
+    const rwContext = isKinyarwandaQuery(lastText)
+      ? `\n\n${KINYARWANDA_CORPUS}`
+      : "";
+
+    const systemContent = `${BASE_PROMPT}\n\n${v.persona}${kbContext}${rwContext}`;
 
     const body: any = {
       model: v.model,
