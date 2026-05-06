@@ -50,14 +50,24 @@ export interface WebSearchDecision {
 
 export function shouldTriggerWebSearch(message: string): WebSearchDecision {
   const lowerMessage = message.toLowerCase().trim();
-  
+
+  // Always search for queries about Egreed Technology / EgreedTech / our creator
+  if (/\b(egreed|egreedtech|egreedai|brayan\s+bayishime|egreed\s+technology)\b/i.test(message)) {
+    return {
+      shouldSearch: true,
+      confidence: 1.0,
+      reason: 'Query about Egreed Technology — fetching authoritative info',
+      searchQuery: message,
+    };
+  }
+
   // Check for explicit search request
-  if (lowerMessage.startsWith('search:') || lowerMessage.startsWith('look up:')) {
+  if (lowerMessage.startsWith('search:') || lowerMessage.startsWith('look up:') || lowerMessage.startsWith('shakisha:')) {
     return {
       shouldSearch: true,
       confidence: 1.0,
       reason: 'Explicit search request',
-      searchQuery: message.replace(/^(search:|look up:)/i, '').trim(),
+      searchQuery: message.replace(/^(search:|look up:|shakisha:)/i, '').trim(),
     };
   }
 
