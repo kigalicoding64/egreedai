@@ -4,6 +4,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
+import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
+
+// Map our branded EgreedAI variants -> underlying Puter.js model ids
+const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
+  'egreed-fast':   { model: 'gpt-5-nano',  persona: 'Be quick, friendly, concise.' },
+  'egreed-pro':    { model: 'gpt-5',       persona: 'Be deeply thoughtful, thorough, accurate. Use markdown structure.' },
+  'egreed-reason': { model: 'gpt-5',       persona: 'Think step by step. Show clear reasoning then a definitive answer.' },
+  'egreed-coder':  { model: 'gpt-5-mini',  persona: 'You are an expert software engineer. Always produce production-quality code with file paths.' },
+  'egreed-nano':   { model: 'gpt-5-nano',  persona: 'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.' },
+};
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -279,7 +289,7 @@ export function useChat() {
         ? [...messagesForApi.slice(0, -1), { role: 'user' as const, content: content + webSearchContext }]
         : messagesForApi;
 
-      // Generate AI response via SSE streaming
+      // Generate AI response via Puter.js streaming (no Lovable AI credits)
       setIsLoading(true);
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -302,52 +312,48 @@ export function useChat() {
       };
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const resp = await fetch(CHAT_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: messagesWithContext,
-            variant: modelId,
-            useKnowledge,
-          }),
-          signal: controller.signal,
+        // Pull knowledge base context client-side (our training data)
+        let kbContext = '';
+        if (useKnowledge && isAuthenticated && user) {
+          try {
+            const terms = content.split(/\s+/).filter(Boolean).slice(0, 6).join(' | ');
+            const { data: docs } = await supabase
+              .from('knowledge_documents')
+              .select('title, content')
+              .textSearch('content', terms, { type: 'websearch' })
+              .limit(4);
+            if (docs && docs.length) {
+              kbContext = '\n\n[Knowledge Base]:\n' + docs
+                .map((d: any) => `### ${d.title}\n${(d.content || '').slice(0, 1500)}`)
+                .join('\n\n');
+            }
+          } catch (e) { console.warn('KB lookup failed', e); }
+        }
+
+        const rwContext = isKinyarwandaQuery(content) ? `\n\n${KINYARWANDA_CORPUS}` : '';
+        const variant = PUTER_MODEL_MAP[modelId] || PUTER_MODEL_MAP['egreed-fast'];
+        const systemContent = `${BASE_SYSTEM}\n\n${variant.persona}${kbContext}${rwContext}`;
+
+        const puterMessages = [
+          { role: 'system', content: systemContent },
+          ...messagesWithContext.map((m) => ({ role: m.role, content: m.content })),
+        ];
+
+        if (typeof (window as any).puter === 'undefined') {
+          throw new Error('Puter.js not loaded. Refresh the page.');
+        }
+
+        const stream: any = await (window as any).puter.ai.chat(puterMessages, {
+          model: variant.model,
+          stream: true,
         });
 
-        if (!resp.ok) {
-          if (resp.status === 429) throw new Error('Rate limit exceeded — try again shortly.');
-          if (resp.status === 402) throw new Error('AI credits exhausted. Add credits to continue.');
-          throw new Error('AI request failed');
-        }
-        if (!resp.body) throw new Error('No response stream');
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let done = false;
-        while (!done) {
-          const { done: d, value } = await reader.read();
-          if (d) break;
-          buffer += decoder.decode(value, { stream: true });
-          let nl: number;
-          while ((nl = buffer.indexOf('\n')) !== -1) {
-            let line = buffer.slice(0, nl);
-            buffer = buffer.slice(nl + 1);
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            if (!line.startsWith('data: ')) continue;
-            const json = line.slice(6).trim();
-            if (json === '[DONE]') { done = true; break; }
-            try {
-              const parsed = JSON.parse(json);
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) { assistantContent += delta; updateLast(assistantContent); }
-            } catch {
-              buffer = line + '\n' + buffer;
-              break;
-            }
+        for await (const part of stream) {
+          if (controller.signal.aborted) break;
+          const delta = part?.text ?? part?.message?.content?.[0]?.text ?? '';
+          if (delta) {
+            assistantContent += delta;
+            updateLast(assistantContent);
           }
         }
 
