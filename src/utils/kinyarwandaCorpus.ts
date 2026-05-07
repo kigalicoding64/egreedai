@@ -14,8 +14,22 @@ Complex/political:
 Style: Use natural Kinyarwanda, never word-by-word from English. Use respect plural for elders. For sensitive terms give meaning + neutral context.
 `.trim();
 
+// Strict Kinyarwanda detection: requires multiple high-signal Kinyarwanda tokens
+// OR an explicit request to translate / explain Kinyarwanda. Avoids false positives
+// on English/French queries that contain a single loanword.
+const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|ndagukumbuye|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|kwibuka|umuganda|ubudehe|imihigo|agaciro|ubupfura|gusaba|inkwano|ikinyarwanda)\b/i;
+const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|kuba|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba)\b/i;
+const RW_INTENT = /\b(in kinyarwanda|mu kinyarwanda|en kinyarwanda|translate to kinyarwanda|sobanura|bisobanura|bivuga iki|bivuga\s+iki|icyo .* bivuga)\b/i;
+
 export function isKinyarwandaQuery(text: string): boolean {
-  return /\b(muraho|mwaramutse|mwiriwe|murakoze|amakuru|nitwa|witwa|yego|oya|ndagukunda|ikinyarwanda|kinyarwanda|imana|nyamuneka|mbabarira|ndi |uri |turi |muri |bite sha|sha\b|rukarabankaba|inyenzi|interahamwe|inkotanyi|gacaca|umuganda|ubudehe|itorero|agaciro|kwibuka|umuryango|umugore|umugabo|umwana|abana|igitabo|amazi|inzu|imodoka)\b/i.test(text);
+  if (!text || text.length < 2) return false;
+  if (RW_INTENT.test(text)) return true;
+  if (RW_STRONG.test(text)) return true;
+  // Need at least 2 common Kinyarwanda tokens to count as actually written in Kinyarwanda
+  const matches = text.toLowerCase().match(RW_COMMON);
+  if (!matches) return false;
+  const all = [...text.toLowerCase().matchAll(new RegExp(RW_COMMON.source, 'gi'))];
+  return all.length >= 2;
 }
 
 export const EGREED_FACTS = `
