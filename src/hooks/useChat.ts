@@ -4,6 +4,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
+import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
+
+// Map our branded EgreedAI variants -> underlying Puter.js model ids
+const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
+  'egreed-fast':   { model: 'gpt-5-nano',  persona: 'Be quick, friendly, concise.' },
+  'egreed-pro':    { model: 'gpt-5',       persona: 'Be deeply thoughtful, thorough, accurate. Use markdown structure.' },
+  'egreed-reason': { model: 'gpt-5',       persona: 'Think step by step. Show clear reasoning then a definitive answer.' },
+  'egreed-coder':  { model: 'gpt-5-mini',  persona: 'You are an expert software engineer. Always produce production-quality code with file paths.' },
+  'egreed-nano':   { model: 'gpt-5-nano',  persona: 'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.' },
+};
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
