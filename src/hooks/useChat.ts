@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
 import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
+import { retrieveKnowledge } from '@/utils/kbRetrieval';
 
 // Map our branded EgreedAI variants -> underlying Puter.js model ids
 const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
