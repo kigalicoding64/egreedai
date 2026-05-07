@@ -317,17 +317,7 @@ export function useChat() {
         let kbContext = '';
         if (useKnowledge && isAuthenticated && user) {
           try {
-            const terms = content.split(/\s+/).filter(Boolean).slice(0, 6).join(' | ');
-            const { data: docs } = await supabase
-              .from('knowledge_documents')
-              .select('title, content')
-              .textSearch('content', terms, { type: 'websearch' })
-              .limit(4);
-            if (docs && docs.length) {
-              kbContext = '\n\n[Knowledge Base]:\n' + docs
-                .map((d: any) => `### ${d.title}\n${(d.content || '').slice(0, 1500)}`)
-                .join('\n\n');
-            }
+            kbContext = await retrieveKnowledge(content, user.id, 4);
           } catch (e) { console.warn('KB lookup failed', e); }
         }
 
