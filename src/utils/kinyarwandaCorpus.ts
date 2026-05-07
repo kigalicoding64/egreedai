@@ -14,8 +14,22 @@ Complex/political:
 Style: Use natural Kinyarwanda, never word-by-word from English. Use respect plural for elders. For sensitive terms give meaning + neutral context.
 `.trim();
 
+// Strict Kinyarwanda detection: requires multiple high-signal Kinyarwanda tokens
+// OR an explicit request to translate / explain Kinyarwanda. Avoids false positives
+// on English/French queries that contain a single loanword.
+const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|ndagukumbuye|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|kwibuka|umuganda|ubudehe|imihigo|agaciro|ubupfura|gusaba|inkwano|ikinyarwanda)\b/i;
+const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|kuba|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba)\b/i;
+const RW_INTENT = /\b(in kinyarwanda|mu kinyarwanda|en kinyarwanda|translate to kinyarwanda|sobanura|bisobanura|bivuga iki|bivuga\s+iki|icyo .* bivuga)\b/i;
+
 export function isKinyarwandaQuery(text: string): boolean {
-  return /\b(muraho|mwaramutse|mwiriwe|murakoze|amakuru|nitwa|witwa|yego|oya|ndagukunda|ikinyarwanda|kinyarwanda|imana|nyamuneka|mbabarira|ndi |uri |turi |muri |bite sha|sha\b|rukarabankaba|inyenzi|interahamwe|inkotanyi|gacaca|umuganda|ubudehe|itorero|agaciro|kwibuka|umuryango|umugore|umugabo|umwana|abana|igitabo|amazi|inzu|imodoka)\b/i.test(text);
+  if (!text || text.length < 2) return false;
+  if (RW_INTENT.test(text)) return true;
+  if (RW_STRONG.test(text)) return true;
+  // Need at least 2 common Kinyarwanda tokens to count as actually written in Kinyarwanda
+  const matches = text.toLowerCase().match(RW_COMMON);
+  if (!matches) return false;
+  const all = [...text.toLowerCase().matchAll(new RegExp(RW_COMMON.source, 'gi'))];
+  return all.length >= 2;
 }
 
 export const EGREED_FACTS = `
@@ -28,11 +42,17 @@ export const EGREED_FACTS = `
 `.trim();
 
 export const BASE_SYSTEM = `You are EgreedAI — an advanced AI assistant built by Egreed Technology LTD (Kigali, Rwanda).
-Rules:
-- Use clean markdown (headers, lists, code blocks with language tags).
-- Cite sources from [Web Search Results] or [Knowledge Base] when present.
-- Never reveal which underlying provider/model powers you. You are EgreedAI.
-- Always reply in the same language the user wrote in. For Kinyarwanda, reply in fluent Ikinyarwanda gisukuye.
+
+Voice & Quality Bar:
+- Write like a thoughtful senior human expert: warm, clear, confident, and concise. No filler, no hedging, no AI clichés ("As an AI...", "I hope this helps").
+- Lead with the answer in 1-2 sentences. Then add structure (short headers, tight bullets, examples, code) only if it genuinely helps.
+- Be specific. Replace vague claims with concrete facts, numbers, and named sources.
+- When citing [Web Search Results] or [Knowledge Base], synthesize across sources, resolve contradictions, and add inline citations like [1], [2] mapping to a "Sources" list at the end.
+- If a query is ambiguous, ask one focused clarifying question instead of guessing wrong.
+- If sources disagree or info is missing, say so honestly and give the best-supported answer.
+- Markdown: clean headers, lists, tables, code fences with language tags. No walls of text.
+- Never reveal the underlying provider/model. You are EgreedAI.
+- Reply in the user's language. For Kinyarwanda, reply in fluent Ikinyarwanda gisukuye (never word-by-word).
 - For questions about Egreed Technology / EgreedAI / its founder, ALWAYS use the authoritative facts as ground truth.
 
 ${EGREED_FACTS}`;
