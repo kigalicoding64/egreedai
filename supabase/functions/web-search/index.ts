@@ -49,7 +49,56 @@ function unwrapDdg(href: string): string {
   }
 }
 
-interface Source { title: string; url: string; snippet: string; sourceType?: string }
+interface Source { title: string; url: string; snippet: string; sourceType?: string; quality?: number }
+
+// ---------- Cache + dedupe + rate-limit (in-memory, per-instance) ----------
+type CacheEntry = { at: number; payload: any };
+const CACHE = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+const CACHE_MAX = 200;
+const INFLIGHT = new Map<string, Promise<any>>();
+
+const RL = new Map<string, number[]>(); // ip -> timestamps
+const RL_WINDOW_MS = 60_000;
+const RL_MAX = 20; // per IP per minute
+
+function normKey(q: string) { return q.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 256); }
+
+function cacheGet(k: string) {
+  const e = CACHE.get(k);
+  if (!e) return null;
+  if (Date.now() - e.at > CACHE_TTL_MS) { CACHE.delete(k); return null; }
+  return e.payload;
+}
+function cacheSet(k: string, payload: any) {
+  if (CACHE.size >= CACHE_MAX) {
+    const oldest = [...CACHE.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) CACHE.delete(oldest[0]);
+  }
+  CACHE.set(k, { at: Date.now(), payload });
+}
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const arr = (RL.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS);
+  if (arr.length >= RL_MAX) { RL.set(ip, arr); return true; }
+  arr.push(now); RL.set(ip, arr); return false;
+}
+
+// ---------- Quality scoring ----------
+const LOW_QUALITY_HOSTS = /(pinterest\.|quora\.|reddit\.com\/r\/|answers\.yahoo|ehow\.|fandom\.com|wikihow\.com)/i;
+function scoreSource(s: Source, q: string): number {
+  let n = 0;
+  const text = `${s.title} ${s.snippet}`.toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  for (const t of terms) if (text.includes(t)) n += 2;
+  if (s.snippet.length > 80) n += 2;
+  if (s.snippet.length > 200) n += 1;
+  if (/^https:/.test(s.url)) n += 1;
+  if (LOW_QUALITY_HOSTS.test(s.url)) n -= 3;
+  if (s.sourceType === "encyclopedia") n += 4;
+  if (s.sourceType === "archive") n += 2;
+  return n;
+}
 
 async function ddgSearch(query: string, max = 10): Promise<Source[]> {
   try {
@@ -58,9 +107,9 @@ async function ddgSearch(query: string, max = 10): Promise<Source[]> {
     });
     const html = await r.text();
     const out: Source[] = [];
-    // Match each result block, then extract link + snippet within it
     const blockRe = /<div[^>]*class="[^"]*result\b[^"]*"[\s\S]*?(?=<div[^>]*class="[^"]*result\b|<\/div>\s*<\/div>\s*<\/div>)/g;
     const blocks = html.match(blockRe) || [];
+    const seenHosts = new Set<string>();
     for (const b of blocks) {
       if (out.length >= max) break;
       const linkM = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
@@ -68,13 +117,15 @@ async function ddgSearch(query: string, max = 10): Promise<Source[]> {
       const url = unwrapDdg(linkM[1]);
       const title = decode(linkM[2]);
       if (!title || !/^https?:/.test(url)) continue;
-      // skip obvious junk
       if (/duckduckgo\.com\/y\.js/.test(url)) continue;
       const snipM = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/)
         || b.match(/<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/div>/);
       const snippet = snipM ? decode(snipM[1]) : "";
-      // dedupe by host+path
-      if (out.some((s) => s.url === url)) continue;
+      // dedupe
+      let host = ""; try { host = new URL(url).hostname.replace(/^www\./, ""); } catch {}
+      const dedupeKey = host + "|" + title.toLowerCase().slice(0, 60);
+      if (seenHosts.has(dedupeKey)) continue;
+      seenHosts.add(dedupeKey);
       out.push({ title, url, snippet, sourceType: "web" });
     }
     return out;
@@ -88,8 +139,7 @@ async function wikipediaSummary(query: string): Promise<Source | null> {
   try {
     const sr = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&search=${encodeURIComponent(query)}`, { headers: { "User-Agent": UA } });
     const j = await sr.json();
-    const title = j?.[1]?.[0];
-    const url = j?.[3]?.[0];
+    const title = j?.[1]?.[0]; const url = j?.[3]?.[0];
     if (!title || !url) return null;
     const sm = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: { "User-Agent": UA } });
     const sj = await sm.json();
@@ -119,47 +169,88 @@ async function archiveOrgSearch(query: string, max = 3): Promise<Source[]> {
   } catch { return []; }
 }
 
+async function runSearch(query: string) {
+  const aboutEgreed = isAboutEgreed(query);
+
+  const [web, wiki, ia] = await Promise.all([
+    ddgSearch(query, 10),
+    wikipediaSummary(query),
+    archiveOrgSearch(query, 3),
+  ]);
+
+  const all: Source[] = [];
+  if (wiki) all.push(wiki);
+  all.push(...web);
+  all.push(...ia);
+
+  // Score and rank
+  for (const s of all) s.quality = scoreSource(s, query);
+
+  // If web quality is poor, prefer wiki/archive at the top
+  const webAvg = web.length ? web.reduce((n, s) => n + (s.quality || 0), 0) / web.length : 0;
+  const lowQualityLive = webAvg < 4;
+
+  let ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
+  if (lowQualityLive) {
+    const archival = ranked.filter((s) => s.sourceType === "encyclopedia" || s.sourceType === "archive");
+    const rest = ranked.filter((s) => s.sourceType === "web");
+    ranked = [...archival, ...rest];
+  }
+
+  // Wayback fallback for top web sources
+  await Promise.all(ranked.slice(0, 5).map(async (s) => {
+    if (s.sourceType === "web") {
+      const wb = await waybackArchive(s.url);
+      if (wb) s.snippet += ` (Archived: ${wb})`;
+    }
+  }));
+
+  const lines: string[] = [];
+  if (aboutEgreed) lines.push(EGREED_KNOWLEDGE, "");
+  if (lowQualityLive) {
+    lines.push(`Live web results were sparse/low quality — prioritizing Wikipedia and Internet Archive sources.`, "");
+  }
+  lines.push(`Synthesized sources for "${query}" — cite as [n]:`, "");
+  ranked.forEach((s, i) => {
+    lines.push(`[${i + 1}] (${s.sourceType}) ${s.title}`);
+    lines.push(`    ${s.url}`);
+    if (s.snippet) lines.push(`    ${s.snippet}`);
+    lines.push("");
+  });
+  lines.push("Instruction to assistant: Synthesize a clear, professional, human-quality answer using ONLY the above sources. Resolve contradictions, drop low-quality results, prefer encyclopedia/archive when live web is sparse, and add inline citations like [1], [2]. End with a short 'Sources' list.");
+
+  return { success: true, answer: lines.join("\n"), sources: ranked, query };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "anon";
+    if (rateLimited(ip)) {
+      return new Response(JSON.stringify({ error: "Rate limit: max 20 searches/min" }), {
+        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const { query } = await req.json();
-    if (!query) throw new Error("No query");
+    if (!query || typeof query !== "string") throw new Error("No query");
 
-    const aboutEgreed = isAboutEgreed(query);
+    const key = normKey(query);
+    const cached = cacheGet(key);
+    if (cached) {
+      return new Response(JSON.stringify({ ...cached, cached: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Run sources in parallel
-    const [web, wiki, ia] = await Promise.all([
-      ddgSearch(query, 10),
-      wikipediaSummary(query),
-      archiveOrgSearch(query, 3),
-    ]);
-
-    const sources: Source[] = [];
-    if (wiki) sources.push(wiki);
-    sources.push(...web);
-    sources.push(...ia);
-
-    // For top 3 web results, attach a Wayback snapshot link (in case the live page disappears)
-    await Promise.all(sources.slice(0, 3).map(async (s) => {
-      if (s.sourceType === "web") {
-        const wb = await waybackArchive(s.url);
-        if (wb) s.snippet += ` (Archived: ${wb})`;
-      }
-    }));
-
-    const lines: string[] = [];
-    if (aboutEgreed) lines.push(EGREED_KNOWLEDGE, "");
-    lines.push(`Synthesized sources for "${query}" — cite as [n]:`, "");
-    sources.forEach((s, i) => {
-      lines.push(`[${i + 1}] (${s.sourceType}) ${s.title}`);
-      lines.push(`    ${s.url}`);
-      if (s.snippet) lines.push(`    ${s.snippet}`);
-      lines.push("");
-    });
-    lines.push("Instruction to assistant: Synthesize a clear, professional, human-quality answer using ONLY the above sources. Resolve contradictions, drop low-quality results, and add inline citations like [1], [2]. End with a short 'Sources' list.");
-
-    const answer = lines.join("\n");
-    return new Response(JSON.stringify({ success: true, answer, sources, query }), {
+    // Dedupe in-flight identical queries
+    let promise = INFLIGHT.get(key);
+    if (!promise) {
+      promise = runSearch(query).finally(() => INFLIGHT.delete(key));
+      INFLIGHT.set(key, promise);
+    }
+    const payload = await promise;
+    cacheSet(key, payload);
+    return new Response(JSON.stringify(payload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

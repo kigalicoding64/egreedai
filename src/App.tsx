@@ -8,6 +8,7 @@ import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import Builder from "./pages/Builder";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import KinyarwandaEval from "./pages/KinyarwandaEval";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/settings" element={<Settings />} />
           <Route path="/builder" element={<Builder />} />
           <Route path="/knowledge" element={<KnowledgeBase />} />
+          <Route path="/kinyarwanda-eval" element={<KinyarwandaEval />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
