@@ -14,23 +14,22 @@ Complex/political:
 Style: Use natural Kinyarwanda, never word-by-word from English. Use respect plural for elders. For sensitive terms give meaning + neutral context.
 `.trim();
 
-// Strict Kinyarwanda detection: requires multiple high-signal Kinyarwanda tokens
-// OR an explicit request to translate / explain Kinyarwanda. Avoids false positives
-// on English/French queries that contain a single loanword.
-const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|ndagukumbuye|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|kwibuka|umuganda|ubudehe|imihigo|agaciro|ubupfura|gusaba|inkwano|ikinyarwanda)\b/i;
-const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|kuba|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba)\b/i;
+// Strong tokens = unambiguous Kinyarwanda (greetings, conjugated forms, sensitive RW-only terms).
+// Note: loanwords like "umuganda", "kwibuka", "agaciro" are intentionally NOT strong because
+// English speakers use them too. They count toward COMMON instead.
+const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|ndagukumbuye|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|ndashaka|ndabona|ndakunda|ndumva)\b/i;
+const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|gitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|kuba|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba|kumenya|neza|nawe|yawe|iki|uko|cyane|umuganda|kwibuka|agaciro|ubudehe|imihigo|ubupfura|ikinyarwanda)\b/i;
 const RW_INTENT = /\b(in kinyarwanda|mu kinyarwanda|en kinyarwanda|translate to kinyarwanda|sobanura|bisobanura|bivuga iki|bivuga\s+iki|icyo .* bivuga)\b/i;
 
 export function isKinyarwandaQuery(text: string): boolean {
-  if (!text || text.length < 2) return false;
+  if (!text || text.length < 3) return false;
   if (RW_INTENT.test(text)) return true;
   if (RW_STRONG.test(text)) return true;
-  // Need at least 2 common Kinyarwanda tokens to count as actually written in Kinyarwanda
-  const matches = text.toLowerCase().match(RW_COMMON);
-  if (!matches) return false;
+  // 2+ common Kinyarwanda tokens required (avoids single-loanword English false positives)
   const all = [...text.toLowerCase().matchAll(new RegExp(RW_COMMON.source, 'gi'))];
   return all.length >= 2;
 }
+
 
 export const EGREED_FACTS = `
 [About your creator — Egreed Technology LTD — egreedtech.org]
