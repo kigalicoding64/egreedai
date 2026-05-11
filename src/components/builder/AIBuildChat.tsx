@@ -73,7 +73,7 @@ Current page has ${existingComponents.length} components.`;
         { role: 'user', content: userMessage },
       ];
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,16 +84,18 @@ Current page has ${existingComponents.length} components.`;
             { role: 'system', content: systemPrompt },
             ...allMessages,
           ],
+          stream: true,
         }),
       });
 
       if (!response.ok) {
-        if (response.status === 429) {
-          toast.error('Rate limited. Please wait a moment.');
+        const errData = await response.json().catch(() => ({}));
+        if (errData.notConfigured) {
+          toast.error('LLM not configured. Add your Llama Stack URL in secrets to enable AI builder.');
           return;
         }
-        if (response.status === 402) {
-          toast.error('Credits required. Please add credits.');
+        if (response.status === 429) {
+          toast.error('Rate limited. Please wait a moment.');
           return;
         }
         throw new Error('AI generation failed');
@@ -119,6 +121,31 @@ Current page has ${existingComponents.length} components.`;
           if (!line.startsWith('data: ')) continue;
           const jsonStr = line.slice(6).trim();
           if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullResponse += content;
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === 'assistant') {
+                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: fullResponse } : m);
+                }
+                return [...prev, { role: 'assistant', content: fullResponse }];
+              });
+            }
+          } catch {}
+        }
+      }
+
+      // Flush remaining buffer
+      if (buffer.trim()) {
+        for (let raw of buffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;

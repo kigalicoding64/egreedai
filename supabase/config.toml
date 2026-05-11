@@ -3,6 +3,9 @@ project_id = "vvyhsljwwsubjcsmtcrq"
 [functions.chat]
 verify_jwt = false
 
+[functions.llama-chat]
+verify_jwt = false
+
 [functions.generate-image]
 verify_jwt = false
 

@@ -53,7 +53,7 @@ Rules:
 
 ${existingComponents.length > 0 ? `The page currently has ${existingComponents.length} components. Generate new components to add or replace.` : 'Generate a complete page.'}`;
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,10 +64,17 @@ ${existingComponents.length > 0 ? `The page currently has ${existingComponents.l
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt },
           ],
+          stream: true,
         }),
       });
 
-      if (!response.ok) throw new Error('AI generation failed');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (errData.notConfigured) {
+          throw new Error('LLM not configured. Add your Llama Stack URL in secrets to enable AI builder.');
+        }
+        throw new Error('AI generation failed');
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');

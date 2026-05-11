@@ -7,13 +7,13 @@ import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDe
 import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
 import { retrieveKnowledge } from '@/utils/kbRetrieval';
 
-// Map our branded EgreedAI variants -> underlying Puter.js model ids
-const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
-  'egreed-fast':   { model: 'gpt-5-nano',  persona: 'Be quick, friendly, concise.' },
-  'egreed-pro':    { model: 'gpt-5',       persona: 'Be deeply thoughtful, thorough, accurate. Use markdown structure.' },
-  'egreed-reason': { model: 'gpt-5',       persona: 'Think step by step. Show clear reasoning then a definitive answer.' },
-  'egreed-coder':  { model: 'gpt-5-mini',  persona: 'You are an expert software engineer. Always produce production-quality code with file paths.' },
-  'egreed-nano':   { model: 'gpt-5-nano',  persona: 'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.' },
+// Map our branded EgreedAI variants -> system personas
+const MODEL_PERSONA_MAP: Record<string, string> = {
+  'egreed-fast':   'Be quick, friendly, concise.',
+  'egreed-pro':    'Be deeply thoughtful, thorough, accurate. Use markdown structure.',
+  'egreed-reason': 'Think step by step. Show clear reasoning then a definitive answer.',
+  'egreed-coder':  'You are an expert software engineer. Always produce production-quality code with file paths.',
+  'egreed-nano':   'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.',
 };
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -23,8 +23,7 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-const IMAGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`;
+const LLAMA_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`;
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -322,29 +321,106 @@ export function useChat() {
         }
 
         const rwContext = isKinyarwandaQuery(content) ? `\n\n${KINYARWANDA_CORPUS}` : '';
-        const variant = PUTER_MODEL_MAP[modelId] || PUTER_MODEL_MAP['egreed-fast'];
-        const systemContent = `${BASE_SYSTEM}\n\n${variant.persona}${kbContext}${rwContext}`;
+        const persona = MODEL_PERSONA_MAP[modelId] || MODEL_PERSONA_MAP['egreed-fast'];
+        const systemContent = `${BASE_SYSTEM}\n\n${persona}${kbContext}${rwContext}`;
 
-        const puterMessages = [
+        const llamaMessages = [
           { role: 'system', content: systemContent },
           ...messagesWithContext.map((m) => ({ role: m.role, content: m.content })),
         ];
 
-        if (typeof (window as any).puter === 'undefined') {
-          throw new Error('Puter.js not loaded. Refresh the page.');
-        }
+        let fallbackToSearch = false;
+        try {
+          const response = await fetch(LLAMA_CHAT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ messages: llamaMessages, stream: true }),
+            signal: controller.signal,
+          });
 
-        const stream: any = await (window as any).puter.ai.chat(puterMessages, {
-          model: variant.model,
-          stream: true,
-        });
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            if (errData.notConfigured) {
+              fallbackToSearch = true;
+              throw new Error('Llama Stack not configured');
+            }
+            throw new Error(errData.error || `LLM error ${response.status}`);
+          }
 
-        for await (const part of stream) {
-          if (controller.signal.aborted) break;
-          const delta = part?.text ?? part?.message?.content?.[0]?.text ?? '';
-          if (delta) {
-            assistantContent += delta;
-            updateLast(assistantContent);
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error('No response body');
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex: number;
+            while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+              let line = buffer.slice(0, newlineIndex);
+              buffer = buffer.slice(newlineIndex + 1);
+              if (line.endsWith('\r')) line = line.slice(0, -1);
+              if (!line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+                if (delta) {
+                  assistantContent += delta;
+                  updateLast(assistantContent);
+                }
+              } catch {
+                buffer = line + '\n' + buffer;
+                break;
+              }
+            }
+          }
+
+          // Flush remaining buffer
+          if (buffer.trim()) {
+            for (let raw of buffer.split('\n')) {
+              if (!raw) continue;
+              if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+              if (!raw.startsWith('data: ')) continue;
+              const jsonStr = raw.slice(6).trim();
+              if (jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+                if (delta) {
+                  assistantContent += delta;
+                  updateLast(assistantContent);
+                }
+              } catch {}
+            }
+          }
+        } catch (error) {
+          if ((error as Error).name === 'AbortError') {
+            console.log('Request aborted');
+          } else if (fallbackToSearch) {
+            // Fallback to web search results
+            const searchResult = await performWebSearch(content);
+            if (searchResult) {
+              assistantContent = searchResult;
+              updateLast(assistantContent);
+            } else {
+              assistantContent = 'No LLM is currently configured and no search results were found. Please add your Llama Stack URL in project secrets to enable AI responses.';
+              updateLast(assistantContent);
+            }
+          } else {
+            console.error('Error generating response:', error);
+            toast({
+              title: "Error",
+              description: (error as Error).message || "Failed to get AI response",
+              variant: "destructive"
+            });
           }
         }
 
@@ -353,17 +429,6 @@ export function useChat() {
             conversation_id: conversationId,
             role: 'assistant',
             content: assistantContent
-          });
-        }
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          console.log('Request aborted');
-        } else {
-          console.error('Error generating response:', error);
-          toast({
-            title: "Error",
-            description: (error as Error).message || "Failed to get AI response",
-            variant: "destructive"
           });
         }
       } finally {
@@ -433,25 +498,12 @@ export function useChat() {
     setIsLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(IMAGE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ prompt }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.imageUrl) throw new Error(json.error || 'Image generation failed');
-      const imageUrl = json.imageUrl;
-
+      // Image generation is disabled since Lovable AI was disconnected
       const aiMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: 'Here is your generated image!',
+        content: 'Image generation is currently disabled. Connect your Llama Stack server to enable media generation.',
         timestamp: new Date(),
-        imageUrl
       };
 
       setConversations((prev) =>
@@ -478,13 +530,12 @@ export function useChat() {
           {
             conversation_id: conversationId,
             role: 'assistant',
-            content: aiMessage.content,
-            image_url: aiMessage.imageUrl
+            content: aiMessage.content
           }
         ]);
       }
     } catch (error) {
-      console.error('Error generating image:', error);
+      console.error('Error:', error);
       toast({
         title: "Image generation failed",
         description: (error as Error).message,

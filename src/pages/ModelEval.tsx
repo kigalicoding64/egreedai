@@ -11,33 +11,46 @@ import { scoreOutput, type EvalResult } from '@/utils/modelEvalScoring';
 import { EGREED_MODELS } from '@/types/egreedModels';
 import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
 
-const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
-  'egreed-fast':   { model: 'gpt-5-nano',  persona: 'Be quick, friendly, concise.' },
-  'egreed-pro':    { model: 'gpt-5',       persona: 'Be deeply thoughtful, thorough, accurate. Use markdown structure.' },
-  'egreed-reason': { model: 'gpt-5',       persona: 'Think step by step. Show clear reasoning then a definitive answer.' },
-  'egreed-coder':  { model: 'gpt-5-mini',  persona: 'You are an expert software engineer. Always produce production-quality code with file paths.' },
-  'egreed-nano':   { model: 'gpt-5-nano',  persona: 'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.' },
+const MODEL_PERSONA_MAP: Record<string, string> = {
+  'egreed-fast':   'Be quick, friendly, concise.',
+  'egreed-pro':    'Be deeply thoughtful, thorough, accurate. Use markdown structure.',
+  'egreed-reason': 'Think step by step. Show clear reasoning then a definitive answer.',
+  'egreed-coder':  'You are an expert software engineer. Always produce production-quality code with file paths.',
+  'egreed-nano':   'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.',
 };
 
 async function runCase(c: EvalCase, modelId: string): Promise<EvalResult> {
-  const variant = PUTER_MODEL_MAP[modelId] || PUTER_MODEL_MAP['egreed-fast'];
+  const persona = MODEL_PERSONA_MAP[modelId] || MODEL_PERSONA_MAP['egreed-fast'];
   const rwContext = isKinyarwandaQuery(c.prompt) ? `\n\n${KINYARWANDA_CORPUS}` : '';
-  const system = `${BASE_SYSTEM}\n\n${variant.persona}${rwContext}`;
+  const system = `${BASE_SYSTEM}\n\n${persona}${rwContext}`;
   const start = performance.now();
   try {
-    if (typeof (window as any).puter === 'undefined') throw new Error('Puter.js not loaded');
-    const res: any = await (window as any).puter.ai.chat(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: c.prompt },
-      ],
-      { model: variant.model, stream: false }
-    );
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: c.prompt },
+        ],
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `LLM error ${response.status}`);
+    }
+
+    const data = await response.json();
     const text =
-      res?.message?.content?.[0]?.text ??
-      res?.message?.content ??
-      res?.text ??
-      (typeof res === 'string' ? res : JSON.stringify(res));
+      data?.choices?.[0]?.message?.content ??
+      data?.message?.content ??
+      data?.text ??
+      (typeof data === 'string' ? data : JSON.stringify(data));
     const latency = Math.round(performance.now() - start);
     return scoreOutput(c, String(text || ''), latency);
   } catch (e) {

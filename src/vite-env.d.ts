@@ -1,16 +1,11 @@
 /// <reference types="vite/client" />
 
-interface PuterAI {
-  chat(
-    prompt: string | Array<{ role: string; content: string }>,
-    options?: { model?: string; stream?: boolean }
-  ): Promise<any>;
-  txt2img(prompt: string, testMode?: boolean): Promise<HTMLImageElement>;
+interface ImportMetaEnv {
+  readonly VITE_SUPABASE_URL: string;
+  readonly VITE_SUPABASE_PUBLISHABLE_KEY: string;
+  readonly VITE_SUPABASE_ANON_KEY: string;
 }
 
-interface Puter {
-  ai: PuterAI;
-  print: (text: string) => void;
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
 }
-
-declare var puter: Puter;
