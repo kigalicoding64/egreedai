@@ -7,13 +7,13 @@ import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDe
 import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
 import { retrieveKnowledge } from '@/utils/kbRetrieval';
 
-// Map our branded EgreedAI variants -> underlying Puter.js model ids
-const PUTER_MODEL_MAP: Record<string, { model: string; persona: string }> = {
-  'egreed-fast':   { model: 'gpt-5-nano',  persona: 'Be quick, friendly, concise.' },
-  'egreed-pro':    { model: 'gpt-5',       persona: 'Be deeply thoughtful, thorough, accurate. Use markdown structure.' },
-  'egreed-reason': { model: 'gpt-5',       persona: 'Think step by step. Show clear reasoning then a definitive answer.' },
-  'egreed-coder':  { model: 'gpt-5-mini',  persona: 'You are an expert software engineer. Always produce production-quality code with file paths.' },
-  'egreed-nano':   { model: 'gpt-5-nano',  persona: 'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.' },
+// Map our branded EgreedAI variants -> system personas
+const MODEL_PERSONA_MAP: Record<string, string> = {
+  'egreed-fast':   'Be quick, friendly, concise.',
+  'egreed-pro':    'Be deeply thoughtful, thorough, accurate. Use markdown structure.',
+  'egreed-reason': 'Think step by step. Show clear reasoning then a definitive answer.',
+  'egreed-coder':  'You are an expert software engineer. Always produce production-quality code with file paths.',
+  'egreed-nano':   'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.',
 };
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -23,8 +23,7 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-const IMAGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`;
+const LLAMA_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`;
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
