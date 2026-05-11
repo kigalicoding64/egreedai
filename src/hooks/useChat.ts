@@ -321,29 +321,106 @@ export function useChat() {
         }
 
         const rwContext = isKinyarwandaQuery(content) ? `\n\n${KINYARWANDA_CORPUS}` : '';
-        const variant = PUTER_MODEL_MAP[modelId] || PUTER_MODEL_MAP['egreed-fast'];
-        const systemContent = `${BASE_SYSTEM}\n\n${variant.persona}${kbContext}${rwContext}`;
+        const persona = MODEL_PERSONA_MAP[modelId] || MODEL_PERSONA_MAP['egreed-fast'];
+        const systemContent = `${BASE_SYSTEM}\n\n${persona}${kbContext}${rwContext}`;
 
-        const puterMessages = [
+        const llamaMessages = [
           { role: 'system', content: systemContent },
           ...messagesWithContext.map((m) => ({ role: m.role, content: m.content })),
         ];
 
-        if (typeof (window as any).puter === 'undefined') {
-          throw new Error('Puter.js not loaded. Refresh the page.');
-        }
+        let fallbackToSearch = false;
+        try {
+          const response = await fetch(LLAMA_CHAT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ messages: llamaMessages, stream: true }),
+            signal: controller.signal,
+          });
 
-        const stream: any = await (window as any).puter.ai.chat(puterMessages, {
-          model: variant.model,
-          stream: true,
-        });
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            if (errData.notConfigured) {
+              fallbackToSearch = true;
+              throw new Error('Llama Stack not configured');
+            }
+            throw new Error(errData.error || `LLM error ${response.status}`);
+          }
 
-        for await (const part of stream) {
-          if (controller.signal.aborted) break;
-          const delta = part?.text ?? part?.message?.content?.[0]?.text ?? '';
-          if (delta) {
-            assistantContent += delta;
-            updateLast(assistantContent);
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error('No response body');
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex: number;
+            while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+              let line = buffer.slice(0, newlineIndex);
+              buffer = buffer.slice(newlineIndex + 1);
+              if (line.endsWith('\r')) line = line.slice(0, -1);
+              if (!line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === '[DONE]') break;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+                if (delta) {
+                  assistantContent += delta;
+                  updateLast(assistantContent);
+                }
+              } catch {
+                buffer = line + '\n' + buffer;
+                break;
+              }
+            }
+          }
+
+          // Flush remaining buffer
+          if (buffer.trim()) {
+            for (let raw of buffer.split('\n')) {
+              if (!raw) continue;
+              if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+              if (!raw.startsWith('data: ')) continue;
+              const jsonStr = raw.slice(6).trim();
+              if (jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+                if (delta) {
+                  assistantContent += delta;
+                  updateLast(assistantContent);
+                }
+              } catch {}
+            }
+          }
+        } catch (error) {
+          if ((error as Error).name === 'AbortError') {
+            console.log('Request aborted');
+          } else if (fallbackToSearch) {
+            // Fallback to web search results
+            const searchResult = await performWebSearch(content);
+            if (searchResult) {
+              assistantContent = searchResult;
+              updateLast(assistantContent);
+            } else {
+              assistantContent = 'No LLM is currently configured and no search results were found. Please add your Llama Stack URL in project secrets to enable AI responses.';
+              updateLast(assistantContent);
+            }
+          } else {
+            console.error('Error generating response:', error);
+            toast({
+              title: "Error",
+              description: (error as Error).message || "Failed to get AI response",
+              variant: "destructive"
+            });
           }
         }
 
@@ -352,17 +429,6 @@ export function useChat() {
             conversation_id: conversationId,
             role: 'assistant',
             content: assistantContent
-          });
-        }
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          console.log('Request aborted');
-        } else {
-          console.error('Error generating response:', error);
-          toast({
-            title: "Error",
-            description: (error as Error).message || "Failed to get AI response",
-            variant: "destructive"
           });
         }
       } finally {
