@@ -264,7 +264,7 @@ export function VideoGenerator({ onClose, onVideoGenerated, uploadedFiles = [] }
           </Button>
 
           <p className="text-xs text-center text-muted-foreground">
-            Powered by Lovable Cloud AI — generates in ~10 seconds
+            Video generation currently unavailable — connect your Llama Stack server to enable media generation.
           </p>
         </div>
       </div>
