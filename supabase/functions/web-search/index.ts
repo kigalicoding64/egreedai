@@ -213,8 +213,11 @@ function humanize(query: string, ranked: Source[], opts: { code: boolean; egreed
     ? "\n\n— from your friends at **Egreed Technology** 💚"
     : "";
 
+  if (opts.egreed) {
+    return `${intro}\n\nEgreed Technology is an IT consulting & software company based in Kigali, Rwanda, founded by Brayan Bayishime Shema. We build school management systems, websites, mobile apps, AI assistants (like me — EgreedAI 👋), and offer cloud, data, and IT training services across Rwanda and East Africa.${body ? "\n\n" + body : ""}${egreedTag}`;
+  }
   if (!body) {
-    return `${intro}\n\nI couldn't pull a clean answer from the web this time, but try rephrasing your question and I'll dig again.${egreedTag}`;
+    return `${intro}\n\nHmm, I couldn't pull a clean answer this time. Try asking it a slightly different way and I'll take another shot.${egreedTag}`;
   }
   return `${intro}\n\n${body}${egreedTag}`;
 }
