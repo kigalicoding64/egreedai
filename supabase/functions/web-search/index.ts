@@ -234,33 +234,45 @@ function dedupeSentences(arr: string[]): string[] {
   }
   return out;
 }
-function humanize(query: string, ranked: Source[], opts: { code: boolean; egreed: boolean }): string {
+function stripUrlsAndCitations(s: string): string {
+  return s
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/www\.\S+/gi, "")
+    .replace(/\b[\w.-]+\.(com|org|net|io|co|gov|edu|rw|africa)\b\S*/gi, "")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\(source[^)]*\)/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function humanize(query: string, ranked: Source[], opts: { code: boolean; rw: boolean }): string {
   const top = ranked.slice(0, 6);
   const sentences = dedupeSentences(top.flatMap((s) => splitSentences(cleanSnippet(s.snippet || s.title))));
-  const body = sentences.slice(0, opts.code ? 6 : 5).join(" ");
+  const body = stripUrlsAndCitations(sentences.slice(0, opts.code ? 6 : 5).join(" "));
 
-  const intros = opts.code
-    ? ["Sure! Here's a clear way to think about it 👇", "Great question — let me walk you through it.", "Happy to help! Here's the gist:"]
-    : ["Here's what I've got for you ✨", "Sure thing — here's a friendly rundown:", "Got it! Quick answer for you:"];
-  const intro = intros[Math.floor(Math.random() * intros.length)];
+  const introsRW = ["Reka nkubwire ✨", "Dore icyo nzi 💚", "Igisubizo ni iki:"];
+  const introsCode = ["Sure! Here's a clear way to think about it 👇", "Great question — let me walk you through it.", "Happy to help! Here's the gist:"];
+  const introsGeneral = ["Here's what I've got for you ✨", "Sure thing — here's a friendly rundown:", "Got it! Quick answer for you:"];
+  const pool = opts.rw ? introsRW : (opts.code ? introsCode : introsGeneral);
+  const intro = pool[Math.floor(Math.random() * pool.length)];
 
-  const egreedTag = opts.egreed
-    ? "\n\n— from your friends at **Egreed Technology** 💚"
-    : "";
-
-  if (opts.egreed) {
-    return `${intro}\n\nEgreed Technology is an IT consulting & software company based in Kigali, Rwanda, founded by Brayan Bayishime Shema. We build school management systems, websites, mobile apps, AI assistants (like me — EgreedAI 👋), and offer cloud, data, and IT training services across Rwanda and East Africa.${body ? "\n\n" + body : ""}${egreedTag}`;
-  }
   if (!body) {
-    return `${intro}\n\nHmm, I couldn't pull a clean answer this time. Try asking it a slightly different way and I'll take another shot.${egreedTag}`;
+    return opts.rw
+      ? `${intro}\n\nMmh, sinabashije kubona igisubizo cyiza. Ongera ubaze ukoresheje amagambo atandukanye, ngerageze nanone 🙂`
+      : `${intro}\n\nHmm, I couldn't pull a clean answer this time. Try asking it a slightly different way and I'll take another shot.`;
   }
-  return `${intro}\n\n${body}${egreedTag}`;
+  return `${intro}\n\n${body}`;
 }
 
 async function runSearch(query: string) {
-  const aboutEgreed = isAboutEgreed(query);
-  const codeQ = isCodeQuery(query);
+  const rw = isKinyarwanda(query);
+  const aboutEgreed = isAboutEgreed(query) || (isAboutFounder(query) && /\b(your|you|egreed|wawe|EgreedAI)\b/i.test(query));
 
+  if (aboutEgreed) {
+    return { success: true, answer: buildEgreedAnswer(query, rw), sources: [], query };
+  }
+
+  const codeQ = isCodeQuery(query);
   const [web, wiki, ia, gfg] = await Promise.all([
     ddgSearch(query, 8),
     wikipediaSummary(query),
@@ -275,11 +287,10 @@ async function runSearch(query: string) {
   all.push(...ia);
 
   for (const s of all) s.quality = scoreSource(s, query) + (s.sourceType === "geeksforgeeks" ? 5 : 0);
+  const ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
 
-  let ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
-
-  const answer = humanize(query, ranked, { code: codeQ, egreed: aboutEgreed });
-  return { success: true, answer, sources: ranked, query };
+  const answer = humanize(query, ranked, { code: codeQ, rw });
+  return { success: true, answer, sources: [], query };
 }
 
 serve(async (req) => {
