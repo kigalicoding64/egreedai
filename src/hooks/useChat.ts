@@ -3,18 +3,7 @@ import { Message, Conversation } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
-import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
-import { retrieveKnowledge } from '@/utils/kbRetrieval';
-
-// Map our branded EgreedAI variants -> system personas
-const MODEL_PERSONA_MAP: Record<string, string> = {
-  'egreed-fast':   'Be quick, friendly, concise.',
-  'egreed-pro':    'Be deeply thoughtful, thorough, accurate. Use markdown structure.',
-  'egreed-reason': 'Think step by step. Show clear reasoning then a definitive answer.',
-  'egreed-coder':  'You are an expert software engineer. Always produce production-quality code with file paths.',
-  'egreed-nano':   'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.',
-};
+import { formatSearchResults } from '@/utils/webSearchDetection';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -23,7 +12,6 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
-const LLAMA_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`;
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
