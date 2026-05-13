@@ -169,57 +169,79 @@ async function archiveOrgSearch(query: string, max = 3): Promise<Source[]> {
   } catch { return []; }
 }
 
+// ---------- Programming / coding detection → GeeksforGeeks ----------
+const CODE_HINTS = /\b(algorithm|algorithms|data structure|dsa|array|arrays|linked list|stack|queue|tree|binary tree|graph|hash|hashmap|recursion|sort|sorting|search|big[- ]?o|complexity|leetcode|interview|python|java\b|javascript|typescript|c\+\+|golang|rust\b|kotlin|php|sql|mysql|mongodb|react\b|node\.?js|django|flask|spring|api|rest|loop|function|class|oop|object[- ]oriented|pointer|memory|thread|concurrency|compile|debug|regex|json|xml|html|css|tailwind)\b/i;
+function isCodeQuery(q: string): boolean { return CODE_HINTS.test(q); }
+
+async function gfgSearch(query: string, max = 5): Promise<Source[]> {
+  const res = await ddgSearch(`site:geeksforgeeks.org ${query}`, max);
+  return res.map((s) => ({ ...s, sourceType: "geeksforgeeks" }));
+}
+
+// ---------- Friendly humanizer (no LLM, no citations) ----------
+function cleanSnippet(s: string): string {
+  return s
+    .replace(/\(Archived:[^)]*\)/g, "")
+    .replace(/\b(Wikipedia:|Internet Archive:|GeeksforGeeks[-:])\s*/gi, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function splitSentences(s: string): string[] {
+  return s.split(/(?<=[.!?])\s+(?=[A-ZÀ-Ý0-9"'])/).map((x) => x.trim()).filter((x) => x.length > 25 && x.length < 320);
+}
+function dedupeSentences(arr: string[]): string[] {
+  const seen = new Set<string>(); const out: string[] = [];
+  for (const s of arr) {
+    const k = s.toLowerCase().replace(/[^a-z0-9 ]/g, "").slice(0, 80);
+    if (seen.has(k)) continue; seen.add(k); out.push(s);
+  }
+  return out;
+}
+function humanize(query: string, ranked: Source[], opts: { code: boolean; egreed: boolean }): string {
+  const top = ranked.slice(0, 6);
+  const sentences = dedupeSentences(top.flatMap((s) => splitSentences(cleanSnippet(s.snippet || s.title))));
+  const body = sentences.slice(0, opts.code ? 6 : 5).join(" ");
+
+  const intros = opts.code
+    ? ["Sure! Here's a clear way to think about it 👇", "Great question — let me walk you through it.", "Happy to help! Here's the gist:"]
+    : ["Here's what I've got for you ✨", "Sure thing — here's a friendly rundown:", "Got it! Quick answer for you:"];
+  const intro = intros[Math.floor(Math.random() * intros.length)];
+
+  const egreedTag = opts.egreed
+    ? "\n\n— from your friends at **Egreed Technology** 💚"
+    : "";
+
+  if (!body) {
+    return `${intro}\n\nI couldn't pull a clean answer from the web this time, but try rephrasing your question and I'll dig again.${egreedTag}`;
+  }
+  return `${intro}\n\n${body}${egreedTag}`;
+}
+
 async function runSearch(query: string) {
   const aboutEgreed = isAboutEgreed(query);
+  const codeQ = isCodeQuery(query);
 
-  const [web, wiki, ia] = await Promise.all([
-    ddgSearch(query, 10),
+  const [web, wiki, ia, gfg] = await Promise.all([
+    ddgSearch(query, 8),
     wikipediaSummary(query),
-    archiveOrgSearch(query, 3),
+    archiveOrgSearch(query, 2),
+    codeQ ? gfgSearch(query, 5) : Promise.resolve([] as Source[]),
   ]);
 
   const all: Source[] = [];
+  if (codeQ) all.push(...gfg);
   if (wiki) all.push(wiki);
   all.push(...web);
   all.push(...ia);
 
-  // Score and rank
-  for (const s of all) s.quality = scoreSource(s, query);
-
-  // If web quality is poor, prefer wiki/archive at the top
-  const webAvg = web.length ? web.reduce((n, s) => n + (s.quality || 0), 0) / web.length : 0;
-  const lowQualityLive = webAvg < 4;
+  for (const s of all) s.quality = scoreSource(s, query) + (s.sourceType === "geeksforgeeks" ? 5 : 0);
 
   let ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
-  if (lowQualityLive) {
-    const archival = ranked.filter((s) => s.sourceType === "encyclopedia" || s.sourceType === "archive");
-    const rest = ranked.filter((s) => s.sourceType === "web");
-    ranked = [...archival, ...rest];
-  }
 
-  // Wayback fallback for top web sources
-  await Promise.all(ranked.slice(0, 5).map(async (s) => {
-    if (s.sourceType === "web") {
-      const wb = await waybackArchive(s.url);
-      if (wb) s.snippet += ` (Archived: ${wb})`;
-    }
-  }));
-
-  const lines: string[] = [];
-  if (aboutEgreed) lines.push(EGREED_KNOWLEDGE, "");
-  if (lowQualityLive) {
-    lines.push(`Live web results were sparse/low quality — prioritizing Wikipedia and Internet Archive sources.`, "");
-  }
-  lines.push(`Synthesized sources for "${query}" — cite as [n]:`, "");
-  ranked.forEach((s, i) => {
-    lines.push(`[${i + 1}] (${s.sourceType}) ${s.title}`);
-    lines.push(`    ${s.url}`);
-    if (s.snippet) lines.push(`    ${s.snippet}`);
-    lines.push("");
-  });
-  lines.push("Instruction to assistant: Synthesize a clear, professional, human-quality answer using ONLY the above sources. Resolve contradictions, drop low-quality results, prefer encyclopedia/archive when live web is sparse, and add inline citations like [1], [2]. End with a short 'Sources' list.");
-
-  return { success: true, answer: lines.join("\n"), sources: ranked, query };
+  const answer = humanize(query, ranked, { code: codeQ, egreed: aboutEgreed });
+  return { success: true, answer, sources: ranked, query };
 }
 
 serve(async (req) => {
