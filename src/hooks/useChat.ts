@@ -3,18 +3,7 @@ import { Message, Conversation } from '@/types/chat';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { shouldTriggerWebSearch, formatSearchResults } from '@/utils/webSearchDetection';
-import { BASE_SYSTEM, KINYARWANDA_CORPUS, isKinyarwandaQuery } from '@/utils/kinyarwandaCorpus';
-import { retrieveKnowledge } from '@/utils/kbRetrieval';
-
-// Map our branded EgreedAI variants -> system personas
-const MODEL_PERSONA_MAP: Record<string, string> = {
-  'egreed-fast':   'Be quick, friendly, concise.',
-  'egreed-pro':    'Be deeply thoughtful, thorough, accurate. Use markdown structure.',
-  'egreed-reason': 'Think step by step. Show clear reasoning then a definitive answer.',
-  'egreed-coder':  'You are an expert software engineer. Always produce production-quality code with file paths.',
-  'egreed-nano':   'Ultra-fast assistant. Answer in 1-3 sentences unless asked for detail.',
-};
+import { formatSearchResults } from '@/utils/webSearchDetection';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
@@ -23,7 +12,6 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
-const LLAMA_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/llama-chat`;
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -273,23 +261,7 @@ export function useChat() {
         { role: 'user' as const, content }
       ];
 
-      // Check if we should trigger a web search
-      const searchDecision = shouldTriggerWebSearch(content);
-      let webSearchContext = '';
-
-      if (searchDecision.shouldSearch) {
-        const searchResult = await performWebSearch(content);
-        if (searchResult) {
-          webSearchContext = `\n\n[Web Search Results]:\n${searchResult}\n\nPlease use the above search results to provide an accurate and up-to-date response.`;
-        }
-      }
-
-      // Add web search context to messages if available
-      const messagesWithContext = webSearchContext
-        ? [...messagesForApi.slice(0, -1), { role: 'user' as const, content: content + webSearchContext }]
-        : messagesForApi;
-
-      // Generate AI response via Puter.js streaming (no Lovable AI credits)
+      // LLAMA DISABLED — search-first mode. Always try web search; fall back to a friendly canned reply.
       setIsLoading(true);
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -312,116 +284,20 @@ export function useChat() {
       };
 
       try {
-        // Pull knowledge base context client-side (our training data)
-        let kbContext = '';
-        if (useKnowledge && isAuthenticated && user) {
-          try {
-            kbContext = await retrieveKnowledge(content, user.id, 4);
-          } catch (e) { console.warn('KB lookup failed', e); }
-        }
+        const trimmed = content.trim();
+        const isGreeting = /^(hi|hey|hello|yo|muraho|bite|bonjour|salut)\b[!.\s]*$/i.test(trimmed);
 
-        const rwContext = isKinyarwandaQuery(content) ? `\n\n${KINYARWANDA_CORPUS}` : '';
-        const persona = MODEL_PERSONA_MAP[modelId] || MODEL_PERSONA_MAP['egreed-fast'];
-        const systemContent = `${BASE_SYSTEM}\n\n${persona}${kbContext}${rwContext}`;
-
-        const llamaMessages = [
-          { role: 'system', content: systemContent },
-          ...messagesWithContext.map((m) => ({ role: m.role, content: m.content })),
-        ];
-
-        let fallbackToSearch = false;
-        try {
-          const response = await fetch(LLAMA_CHAT_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ messages: llamaMessages, stream: true }),
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            if (errData.notConfigured) {
-              fallbackToSearch = true;
-              throw new Error('Llama Stack not configured');
-            }
-            throw new Error(errData.error || `LLM error ${response.status}`);
-          }
-
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error('No response body');
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            let newlineIndex: number;
-            while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-              let line = buffer.slice(0, newlineIndex);
-              buffer = buffer.slice(newlineIndex + 1);
-              if (line.endsWith('\r')) line = line.slice(0, -1);
-              if (!line.startsWith('data: ')) continue;
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === '[DONE]') break;
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
-                if (delta) {
-                  assistantContent += delta;
-                  updateLast(assistantContent);
-                }
-              } catch {
-                buffer = line + '\n' + buffer;
-                break;
-              }
-            }
-          }
-
-          // Flush remaining buffer
-          if (buffer.trim()) {
-            for (let raw of buffer.split('\n')) {
-              if (!raw) continue;
-              if (raw.endsWith('\r')) raw = raw.slice(0, -1);
-              if (!raw.startsWith('data: ')) continue;
-              const jsonStr = raw.slice(6).trim();
-              if (jsonStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
-                if (delta) {
-                  assistantContent += delta;
-                  updateLast(assistantContent);
-                }
-              } catch {}
-            }
-          }
-        } catch (error) {
-          if ((error as Error).name === 'AbortError') {
-            console.log('Request aborted');
-          } else if (fallbackToSearch) {
-            // Fallback to web search results
-            const searchResult = await performWebSearch(content);
-            if (searchResult) {
-              assistantContent = searchResult;
-              updateLast(assistantContent);
-            } else {
-              assistantContent = 'No LLM is currently configured and no search results were found. Please add your Llama Stack URL in project secrets to enable AI responses.';
-              updateLast(assistantContent);
-            }
+        if (isGreeting) {
+          assistantContent = "Hey there! 👋 I'm **EgreedAI**, your friendly assistant from **Egreed Technology**. Ask me anything — coding tips, facts, news, or just chat!";
+          updateLast(assistantContent);
+        } else {
+          const searchResult = await performWebSearch(content);
+          if (searchResult) {
+            assistantContent = searchResult;
           } else {
-            console.error('Error generating response:', error);
-            toast({
-              title: "Error",
-              description: (error as Error).message || "Failed to get AI response",
-              variant: "destructive"
-            });
+            assistantContent = "Hmm, I couldn't find a clean answer right now. Mind rephrasing your question? 🙂\n\n— *Egreed Technology*";
           }
+          updateLast(assistantContent);
         }
 
         if (isAuthenticated && user && assistantContent) {
@@ -431,6 +307,13 @@ export function useChat() {
             content: assistantContent
           });
         }
+      } catch (error) {
+        console.error('Error generating response:', error);
+        toast({
+          title: "Error",
+          description: (error as Error).message || "Something went wrong",
+          variant: "destructive"
+        });
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;

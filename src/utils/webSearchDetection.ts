@@ -102,8 +102,10 @@ export function shouldTriggerWebSearch(message: string): WebSearchDecision {
     (keywordMatches * 0.15) + (patternMatches * 0.25) + (factualMatch ? 0.3 : 0)
   );
 
-  // Determine if we should search
-  const shouldSearch = confidence >= 0.3;
+  // Search by default for any non-trivial question (Llama disabled → search-first mode)
+  const wordCount = lowerMessage.split(/\s+/).filter(Boolean).length;
+  const looksLikeQuestion = lowerMessage.endsWith('?') || wordCount >= 4;
+  const shouldSearch = confidence >= 0.3 || looksLikeQuestion;
 
   let reason = '';
   if (shouldSearch) {
@@ -130,16 +132,8 @@ export function shouldTriggerWebSearch(message: string): WebSearchDecision {
 
 export function formatSearchResults(
   answer: string,
-  sources: Array<{ title: string; url: string; snippet: string }>
+  _sources: Array<{ title: string; url: string; snippet: string }>
 ): string {
-  let formatted = answer;
-
-  if (sources && sources.length > 0) {
-    formatted += '\n\n---\n\n**Sources:**\n';
-    sources.forEach((source, index) => {
-      formatted += `${index + 1}. [${source.title}](${source.url})\n`;
-    });
-  }
-
-  return formatted;
+  // Friendly mode: never expose sources or raw URLs to the user.
+  return answer;
 }
