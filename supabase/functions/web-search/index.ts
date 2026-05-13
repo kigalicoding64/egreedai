@@ -5,21 +5,56 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const EGREED_KNOWLEDGE = `
-[Authoritative facts about Egreed Technology — official site: https://egreedtech.org]
-- Legal name: Egreed Technology LTD (Egreed Technology, EgreedTech).
-- Registered IT consulting & software company, Kigali, Rwanda. Serves Rwanda & East Africa.
-- Registered with RDB on May 4, 2026.
-- CEO / Founder: Brayan Bayishime Shema. WhatsApp: +250 795 822 290.
-- RDB-licensed services: School Management Systems; Web & Software Development; Hosting & Cloud; Data Processing; IT Consulting & System Design; Computer Training.
-- Other offerings: AI/ML consulting, Data Analytics & BI, Cloud Migration, Cybersecurity, Infra Mgmt, IT Strategy, Mobile Apps, Custom Software, Website/App Mgmt, Pro IT Training, Corporate Workshops.
-- Mission: Empower businesses through innovative digital solutions.
-- 50+ projects delivered, 98% client satisfaction, 24/7 support.
-- EgreedAI is the AI assistant built BY Egreed Technology.
-`.trim();
+const EGREED_FACTS_EN = {
+  intro: "Egreed Technology (also called Egreed Technology LTD or EgreedTech) is a friendly tech company based in Kigali, Rwanda. They help schools, businesses, and organizations across Rwanda and East Africa go digital — and yes, they're the team that built me 💚.",
+  founder: "The company was founded by Brayan Bayishime Shema, who serves as CEO. He's the visionary behind Egreed Technology and the person leading the whole team.",
+  story: "Egreed Technology officially became a registered company in Rwanda on May 4, 2026, through the Rwanda Development Board. Since day one, the focus has been simple: make digital tools that actually help people — especially schools, students, and small businesses.",
+  services: "They build school management systems, websites, mobile apps, and custom software. They also offer cloud hosting, data processing, IT consulting, cybersecurity, AI assistants (hi 👋), and computer training programs.",
+  products: "Some of their cool products include KERO IWAWE ASSIST (an AI helper for agriculture and daily life), Egreed Learning (an online learning platform with IT courses), and Rebalive RW (a health and wellness platform).",
+  contact: "You can reach them on WhatsApp at +250 795 822 290, by email at egreedtechnology@gmail.com, or visit them at KN 4 Ave, Gasabo, Kigali, Rwanda.",
+  numbers: "So far they've delivered 50+ projects with 98% client satisfaction and offer 24/7 support.",
+};
+
+const EGREED_FACTS_RW = {
+  intro: "Egreed Technology (cyangwa Egreed Technology LTD) ni isosiyete y'ikoranabuhanga iherereye i Kigali, mu Rwanda. Bafasha amashuri, ubucuruzi, n'imiryango mu Rwanda no muri Afurika y'Uburasirazuba kujya kuri digitale — kandi ni bo banyaremye 💚.",
+  founder: "Iyi sosiyete yashinzwe na Brayan Bayishime Shema, ari na we CEO wayo. Ni we mutekamutwe w'iyi kompanyi kandi akaba ari we uyobora itsinda ryose.",
+  story: "Egreed Technology yanditswe ku mugaragaro mu Rwanda ku ya 4 Gicurasi 2026, binyuze muri RDB. Kuva itangiye, intego ni imwe: gukora ibikoresho bya digitale bifasha abantu — cyane cyane amashuri, abanyeshuri, n'ubucuruzi buciriritse.",
+  services: "Bakora sisitemu zo gucunga amashuri, urubuga, porogaramu za telefone, na software zihariye. Banatanga serivisi z'ikirere (cloud), ubucungi bw'amakuru, ubujyanama mu ikoranabuhanga, umutekano wa interineti, abafasha ba AI (muraho 👋), n'amahugurwa ya mudasobwa.",
+  products: "Ibicuruzwa byabo birimo KERO IWAWE ASSIST (umufasha wa AI mu buhinzi no mu buzima bwa buri munsi), Egreed Learning (urubuga rw'amasomo ya IT), na Rebalive RW (urubuga rw'ubuzima n'imibereho myiza).",
+  contact: "Ushobora kubageraho kuri WhatsApp +250 795 822 290, kuri imeli egreedtechnology@gmail.com, cyangwa ukabasura kuri KN 4 Ave, Gasabo, Kigali.",
+  numbers: "Kugeza ubu bamaze gukora imishinga irenga 50, hamwe n'abakiriya banyuzwe ku kigero cya 98%, kandi batanga ubufasha amasaha 24/24.",
+};
 
 function isAboutEgreed(q: string): boolean {
   return /\b(egreed|egreedtech|egreed tech|egreed technology|brayan bayishime|egreedai)\b/i.test(q);
+}
+
+function isAboutFounder(q: string): boolean {
+  return /\b(founder|ceo|owner|who (made|built|created|founded|owns)|brayan|shema|uwashinze|nyiri|wayikoze|wayishinze)\b/i.test(q);
+}
+
+// Lightweight Kinyarwanda detection (mirrors client-side detector)
+const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|amakuru|nitwa|witwa|ndashaka|ndakunda|ndabona|ndumva|sobanura|bisobanura|bivuga|nyamuneka|mbabarira|ndagukunda)\b/i;
+const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umwana|inshuti|amazi|inzu|igitabo|ishuri|amafaranga|umunsi|ndi|uri|ari|turi|muri|bari|nta|nti|kuba|gukora|kuvuga|neza|iki|uko|cyane|ikinyarwanda|uwashinze|nyiri)\b/i;
+function isKinyarwanda(text: string): boolean {
+  if (!text || text.length < 3) return false;
+  if (RW_STRONG.test(text)) return true;
+  const matches = [...text.toLowerCase().matchAll(new RegExp(RW_COMMON.source, 'gi'))];
+  return matches.length >= 2;
+}
+
+function buildEgreedAnswer(q: string, rw: boolean): string {
+  const f = rw ? EGREED_FACTS_RW : EGREED_FACTS_EN;
+  const founderFocus = isAboutFounder(q);
+  const intros = rw
+    ? ["Reka nkubwire ✨", "Dore icyo nzi 💚", "Igisubizo ni iki:"]
+    : ["Here's the scoop ✨", "Happy to share 💚", "Quick answer for you:"];
+  const intro = intros[Math.floor(Math.random() * intros.length)];
+  const tag = rw ? "\n\n— inshuti zawe muri **Egreed Technology** 💚" : "\n\n— from your friends at **Egreed Technology** 💚";
+  if (founderFocus) {
+    return `${intro}\n\n${f.founder}\n\n${f.intro}\n\n${f.contact}${tag}`;
+  }
+  return `${intro}\n\n${f.intro}\n\n${f.story}\n\n${f.services}\n\n${f.products}\n\n${f.numbers}${tag}`;
 }
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -199,33 +234,45 @@ function dedupeSentences(arr: string[]): string[] {
   }
   return out;
 }
-function humanize(query: string, ranked: Source[], opts: { code: boolean; egreed: boolean }): string {
+function stripUrlsAndCitations(s: string): string {
+  return s
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/www\.\S+/gi, "")
+    .replace(/\b[\w.-]+\.(com|org|net|io|co|gov|edu|rw|africa)\b\S*/gi, "")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\(source[^)]*\)/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function humanize(query: string, ranked: Source[], opts: { code: boolean; rw: boolean }): string {
   const top = ranked.slice(0, 6);
   const sentences = dedupeSentences(top.flatMap((s) => splitSentences(cleanSnippet(s.snippet || s.title))));
-  const body = sentences.slice(0, opts.code ? 6 : 5).join(" ");
+  const body = stripUrlsAndCitations(sentences.slice(0, opts.code ? 6 : 5).join(" "));
 
-  const intros = opts.code
-    ? ["Sure! Here's a clear way to think about it 👇", "Great question — let me walk you through it.", "Happy to help! Here's the gist:"]
-    : ["Here's what I've got for you ✨", "Sure thing — here's a friendly rundown:", "Got it! Quick answer for you:"];
-  const intro = intros[Math.floor(Math.random() * intros.length)];
+  const introsRW = ["Reka nkubwire ✨", "Dore icyo nzi 💚", "Igisubizo ni iki:"];
+  const introsCode = ["Sure! Here's a clear way to think about it 👇", "Great question — let me walk you through it.", "Happy to help! Here's the gist:"];
+  const introsGeneral = ["Here's what I've got for you ✨", "Sure thing — here's a friendly rundown:", "Got it! Quick answer for you:"];
+  const pool = opts.rw ? introsRW : (opts.code ? introsCode : introsGeneral);
+  const intro = pool[Math.floor(Math.random() * pool.length)];
 
-  const egreedTag = opts.egreed
-    ? "\n\n— from your friends at **Egreed Technology** 💚"
-    : "";
-
-  if (opts.egreed) {
-    return `${intro}\n\nEgreed Technology is an IT consulting & software company based in Kigali, Rwanda, founded by Brayan Bayishime Shema. We build school management systems, websites, mobile apps, AI assistants (like me — EgreedAI 👋), and offer cloud, data, and IT training services across Rwanda and East Africa.${body ? "\n\n" + body : ""}${egreedTag}`;
-  }
   if (!body) {
-    return `${intro}\n\nHmm, I couldn't pull a clean answer this time. Try asking it a slightly different way and I'll take another shot.${egreedTag}`;
+    return opts.rw
+      ? `${intro}\n\nMmh, sinabashije kubona igisubizo cyiza. Ongera ubaze ukoresheje amagambo atandukanye, ngerageze nanone 🙂`
+      : `${intro}\n\nHmm, I couldn't pull a clean answer this time. Try asking it a slightly different way and I'll take another shot.`;
   }
-  return `${intro}\n\n${body}${egreedTag}`;
+  return `${intro}\n\n${body}`;
 }
 
 async function runSearch(query: string) {
-  const aboutEgreed = isAboutEgreed(query);
-  const codeQ = isCodeQuery(query);
+  const rw = isKinyarwanda(query);
+  const aboutEgreed = isAboutEgreed(query) || (isAboutFounder(query) && /\b(your|you|egreed|wawe|EgreedAI)\b/i.test(query));
 
+  if (aboutEgreed) {
+    return { success: true, answer: buildEgreedAnswer(query, rw), sources: [], query };
+  }
+
+  const codeQ = isCodeQuery(query);
   const [web, wiki, ia, gfg] = await Promise.all([
     ddgSearch(query, 8),
     wikipediaSummary(query),
@@ -240,11 +287,10 @@ async function runSearch(query: string) {
   all.push(...ia);
 
   for (const s of all) s.quality = scoreSource(s, query) + (s.sourceType === "geeksforgeeks" ? 5 : 0);
+  const ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
 
-  let ranked = [...all].sort((a, b) => (b.quality || 0) - (a.quality || 0));
-
-  const answer = humanize(query, ranked, { code: codeQ, egreed: aboutEgreed });
-  return { success: true, answer, sources: ranked, query };
+  const answer = humanize(query, ranked, { code: codeQ, rw });
+  return { success: true, answer, sources: [], query };
 }
 
 serve(async (req) => {
