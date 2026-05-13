@@ -102,8 +102,10 @@ export function shouldTriggerWebSearch(message: string): WebSearchDecision {
     (keywordMatches * 0.15) + (patternMatches * 0.25) + (factualMatch ? 0.3 : 0)
   );
 
-  // Determine if we should search
-  const shouldSearch = confidence >= 0.3;
+  // Search by default for any non-trivial question (Llama disabled → search-first mode)
+  const wordCount = lowerMessage.split(/\s+/).filter(Boolean).length;
+  const looksLikeQuestion = lowerMessage.endsWith('?') || wordCount >= 4;
+  const shouldSearch = confidence >= 0.3 || looksLikeQuestion;
 
   let reason = '';
   if (shouldSearch) {
