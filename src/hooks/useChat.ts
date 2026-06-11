@@ -12,6 +12,7 @@ const generateTitle = (content: string) => {
 };
 
 const WEB_SEARCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-search`;
+const EGREED_AI_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/egreed-ai`;
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -284,21 +285,30 @@ export function useChat() {
       };
 
       try {
-        const trimmed = content.trim();
-        const isGreeting = /^(hi|hey|hello|yo|muraho|bite|bonjour|salut)\b[!.\s]*$/i.test(trimmed);
+        // Africa-first EgreedAI brain (Lovable AI Gateway) with auto Kinyarwanda detection
+        const res = await fetch(EGREED_AI_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ messages: messagesForApi }),
+          signal: controller.signal,
+        });
 
-        if (isGreeting) {
-          assistantContent = "Hey there! 👋 I'm **EgreedAI**, your friendly assistant from **Egreed Technology**. Ask me anything — coding tips, facts, news, or just chat!";
-          updateLast(assistantContent);
+        if (res.status === 429) {
+          assistantContent = "I'm getting a lot of questions right now — please try again in a moment. 🙂";
+        } else if (res.status === 402) {
+          assistantContent = "My AI credits ran out for this workspace. Please top up to keep chatting. 🌍";
+        } else if (!res.ok) {
+          assistantContent = "Something went wrong on my side. Mind trying again? 🙂";
         } else {
-          const searchResult = await performWebSearch(content);
-          if (searchResult) {
-            assistantContent = searchResult;
-          } else {
-            assistantContent = "Hmm, I couldn't find a clean answer right now. Mind rephrasing your question? 🙂\n\n— *Egreed Technology*";
-          }
-          updateLast(assistantContent);
+          const data = await res.json();
+          assistantContent = (data?.answer || "").trim() ||
+            "Hmm, I couldn't shape a clean answer for that. Try rephrasing? 🙂";
         }
+
+        updateLast(assistantContent);
 
         if (isAuthenticated && user && assistantContent) {
           await supabase.from('messages').insert({
