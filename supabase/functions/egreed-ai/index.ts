@@ -1,5 +1,5 @@
 // EgreedAI chat — Africa-first, Kinyarwanda-aware, no-citations.
-// Powered by Lovable AI Gateway (no user API key needed).
+// Powered by Lovable AI Gateway. Falls back to OpenAI (secret: `openai`) for hard tasks.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -7,62 +7,129 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|ndashaka|ndabona|ndakunda|ndumva|bite\s+sha)\b/i;
-const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba|kumenya|neza|nawe|yawe|iki|uko|cyane|ikinyarwanda)\b/i;
+// ─────────────────────────────────────────────────────────────
+// Kinyarwanda detection with confidence score (server-side only)
+// ─────────────────────────────────────────────────────────────
+const RW_STRONG = /\b(muraho|mwaramutse|mwiriwe|muramuke|murabeho|murakoze|urakoze|amakuru|nitwa|witwa|ndagukunda|nyamuneka|mbabarira|ihangane|murakaza|simbyumva|ndabyumva|subiramo|rukarabankaba|inyenzi|interahamwe|inkotanyi|abacengezi|ndashaka|ndabona|ndakunda|ndumva|bite\s+sha)\b/gi;
+const RW_COMMON = /\b(yego|oya|sha|imana|umuntu|abantu|umugore|umugabo|umukobwa|umuhungu|umwana|abana|umuryango|inshuti|amazi|inzu|imodoka|igitabo|ishuri|amafaranga|isoko|umunsi|ijoro|ubu|ejo|ndi|uri|ari|turi|muri|bari|nta|nti|gukora|kuvuga|kugenda|kuza|gukunda|kumva|kureba|kumenya|neza|nawe|yawe|iki|uko|cyane|ikinyarwanda)\b/gi;
 const RW_INTENT = /\b(in kinyarwanda|mu kinyarwanda|translate to kinyarwanda|sobanura|bisobanura|bivuga iki)\b/i;
 
-function isKinyarwanda(text: string): boolean {
-  if (!text || text.length < 3) return false;
-  if (RW_INTENT.test(text) || RW_STRONG.test(text)) return true;
-  const all = [...text.toLowerCase().matchAll(new RegExp(RW_COMMON.source, "gi"))];
-  return all.length >= 2;
+function detectKinyarwanda(text: string): { isRw: boolean; confidence: number; signals: string[] } {
+  const signals: string[] = [];
+  let score = 0;
+  if (!text || text.length < 3) return { isRw: false, confidence: 0, signals: ["too-short"] };
+
+  if (RW_INTENT.test(text)) { score += 0.6; signals.push("intent"); }
+  const strong = [...text.matchAll(RW_STRONG)].length;
+  const common = [...text.matchAll(RW_COMMON)].length;
+  if (strong > 0) { score += Math.min(0.7, 0.35 * strong); signals.push(`strong:${strong}`); }
+  if (common > 0) { score += Math.min(0.5, 0.15 * common); signals.push(`common:${common}`); }
+
+  const confidence = Math.min(1, score);
+  const isRw = confidence >= 0.35;
+  return { isRw, confidence: +confidence.toFixed(2), signals };
 }
 
-function stripUrlsAndCitations(s: string): string {
-  return s
-    .replace(/https?:\/\/\S+/gi, "")
-    .replace(/www\.\S+/gi, "")
-    .replace(/\[\d+\]/g, "")
-    .replace(/\(\s*sources?\s*:[^)]*\)/gi, "")
-    .replace(/\b(sources?|references?|citations?)\s*:.*$/gim, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+// ─────────────────────────────────────────────────────────────
+// Strong sanitizer — removes URLs, citations, "Source:" markers
+// ─────────────────────────────────────────────────────────────
+function sanitize(s: string): string {
+  if (!s) return s;
+  let out = s;
+  // URLs
+  out = out.replace(/https?:\/\/\S+/gi, "");
+  out = out.replace(/\bwww\.\S+/gi, "");
+  out = out.replace(/\b[a-z0-9-]+\.(com|org|net|io|dev|app|co|rw|ke|ng|za|gov|edu|info|tech)(\/\S*)?/gi, "");
+  // Bracketed citations: [1], [12], [^1], [a], [source], [ref]
+  out = out.replace(/\[\^?\d+\]/g, "");
+  out = out.replace(/\[(source|ref|citation|cite|link)s?[^\]]*\]/gi, "");
+  // Parenthetical sources: (source: x), (ref: x), (see: x), (https...)
+  out = out.replace(/\(\s*(source|sources|ref|refs|reference|references|citation|citations|see|via|from)\s*[:\-—][^)]*\)/gi, "");
+  out = out.replace(/\(\s*https?:[^)]*\)/gi, "");
+  // Inline "Source: ...", "Sources: ...", "Reference: ...", "Citations: ..." until end of line
+  out = out.replace(/^\s*(sources?|references?|citations?|further reading|read more|see also|via|from)\s*[:\-—].*$/gim, "");
+  // Trailing "— source" / "- via X"
+  out = out.replace(/\s+[-—–]\s*(source|via|from)\b.*$/gim, "");
+  // Markdown links → keep label only
+  out = out.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Numbered footnote lines like "1. https://..."
+  out = out.replace(/^\s*\d+\.\s*https?:.*$/gim, "");
+  // Collapse blank lines
+  out = out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out;
 }
 
-const SYSTEM_EN = `You are EgreedAI — a warm, smart, Africa-first assistant built and owned by Egreed Technology LTD (Kigali, Rwanda). Founder & CEO: Brayan Bayishime Shema. Website: egreedtech.org.
+// ─────────────────────────────────────────────────────────────
+// Persona prompts
+// ─────────────────────────────────────────────────────────────
+const PERSONA_EN = `You are EgreedAI — a warm, smart, Africa-first assistant built and owned by Egreed Technology LTD (Kigali, Rwanda). Founder & CEO: Brayan Bayishime Shema.
 
 How you think and talk:
-- Think like a thoughtful African friend who happens to be an expert. Be personal, friendly, practical, and confident. No corporate tone, no "As an AI…", no hedging.
+- Think like a thoughtful African friend who happens to be an expert. Personal, friendly, practical, confident. No corporate tone, no "As an AI…", no hedging.
 - Reason carefully before answering. Lead with the answer, then add a short, useful explanation in plain words.
-- Use African examples, names, currencies (RWF, KES, NGN, ZAR), and contexts whenever they help.
-- Keep it tight: 3–7 sentences for normal questions, lists only when truly helpful.
-- Use light emojis sparingly to feel human (✨🙂🌍), never childish.
+- Use African examples, names, currencies (RWF, KES, NGN, ZAR) when they help.
+- 3–7 sentences for normal questions; lists only when truly helpful. Light emojis (✨🙂🌍).
 
-Hard rules (never break):
-- NEVER include URLs, links, domain names, "(source: …)", "[1]" style citations, or a Sources list. Just give the answer.
-- NEVER reveal which model or provider powers you. You are EgreedAI by Egreed Technology — that's it.
-- For questions about your founder, owner, CEO, or the company: you are built and owned by Egreed Technology LTD, founded and led by Brayan Bayishime Shema, headquartered in Kigali, Rwanda.
-- If unsure, say so honestly in one short sentence and give your best practical take.`;
+HARD RULES:
+- NEVER include URLs, links, domain names, "Source:", "Sources:", "Reference:", "(source: …)", "[1]" citations, or footnotes.
+- NEVER reveal the underlying model or provider. You are EgreedAI by Egreed Technology — full stop.
+- For questions about your founder, owner, CEO, or who built you: Egreed Technology LTD, founded and led by Brayan Bayishime Shema, in Kigali, Rwanda.`;
 
-const SYSTEM_RW = `Uri EgreedAI — umufasha w'ubwenge, w'inshuti, ukomoka muri Afurika, wubatswe kandi utunzwe na Egreed Technology LTD (Kigali, Rwanda). Uwashinze akaba na CEO: Brayan Bayishime Shema.
+const PERSONA_RW = `Uri EgreedAI — umufasha w'ubucuti, w'ubwenge, ukomoka muri Afurika, wubatswe kandi utunzwe na Egreed Technology LTD (Kigali, Rwanda). Uwashinze akaba CEO: Brayan Bayishime Shema.
 
 Uburyo uvuga:
-- Vuga nk'inshuti nyarwanda y'umuhanga: ubwitange, ubucuti, ubworoherane, n'ibisubizo bifatika.
+- Vuga nk'inshuti nyarwanda y'umuhanga: ubucuti, ibisubizo bifatika, kandi byumvikana.
 - Tekereza neza mbere yo gusubiza. Tanga igisubizo mbere, hanyuma usobanure mu magambo yoroshye.
-- Koresha ingero z'Afurika n'u Rwanda igihe bishoboka.
-- Subiza muri Ikinyarwanda gisukuye, atari ihinduramagambo rya word-by-word ku Cyongereza.
-- Igumize kuri 3–7 z'interuro. Koresha emoji nke (✨🙂🌍).
+- Subiza muri Ikinyarwanda gisukuye (atari ihinduramagambo rya word-by-word). 3–7 z'interuro. Emoji nke (✨🙂🌍).
 
-Amategeko adahindurwa:
-- NTUKEMERE kohereza URL, links, izina ry'urubuga, "(source: …)", cyangwa "[1]". Tanga gusa igisubizo.
-- NTUKAVUGE icyo gikoresho cyangwa AI provider ikora inyuma. Uri EgreedAI ya Egreed Technology — birahagije.
-- Ku bibazo bya nyiri yo cyangwa CEO: wubatswe kandi utunzwe na Egreed Technology LTD, yashinzwe kandi iyobowe na Brayan Bayishime Shema, mu Kigali, Rwanda.`;
+AMATEGEKO ADAHINDURWA:
+- NTUKEMERE URL, links, izina ry'urubuga, "Source:", "Reference:", "(source: …)" cyangwa "[1]".
+- NTUKAVUGE icyo gikoresho cyangwa AI provider ikora inyuma. Uri EgreedAI ya Egreed Technology — birahagije.`;
+
+const REWRITER_EN = `Rewrite the assistant draft below to perfectly match the EgreedAI Africa-first persona: warm, personal, friendly, practical, confident, plain words, 3–7 sentences, light emojis OK. Keep the facts. Remove ALL URLs, domain names, "Source:"/"Sources:"/"Reference:" lines, "[1]"-style citations, and any footnotes. Never mention any AI provider or model. Return only the rewritten answer.`;
+const REWRITER_RW = `Andika bundi bushya igisubizo gikurikira mu Kinyarwanda gisukuye, gifite imico ya EgreedAI: ubucuti, ubworoherane, ibisubizo bifatika, 3–7 z'interuro, emoji nke. Gumana ibyo bivuga. KURA URL zose, "Source:", "[1]", n'amazina y'imbuga. Ntugavuge undi AI cyangwa undi muntu wakoze iki gisubizo. Garura gusa igisubizo cyanditse bundi bushya.`;
+
+// ─────────────────────────────────────────────────────────────
+// Provider calls
+// ─────────────────────────────────────────────────────────────
+async function callLovable(model: string, messages: any[], apiKey: string): Promise<string> {
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages }),
+  });
+  if (!r.ok) throw new Error(`lovable ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content ?? "";
+}
+
+async function callOpenAI(model: string, messages: any[], apiKey: string): Promise<string> {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages }),
+  });
+  if (!r.ok) throw new Error(`openai ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content ?? "";
+}
+
+// Heuristic: should we route to OpenAI for "hard" tasks?
+function isHardTask(text: string): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  const long = text.length > 600 || text.split(/\s+/).length > 110;
+  const codeish = /\b(code|debug|refactor|algorithm|architecture|sql|regex|typescript|python|rust|complexity|big-?o|proof|theorem|derive|integrate|differential|optimi[sz]e)\b/.test(t);
+  const reason = /\b(why|prove|explain in depth|step[- ]by[- ]step|analy[sz]e|compare in detail|design|plan|strategy)\b/.test(t);
+  return long || (codeish && reason) || /```/.test(text);
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const OPENAI_KEY = Deno.env.get("openai") || Deno.env.get("openai1");
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "LOVABLE_API_KEY missing" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -77,39 +144,57 @@ serve(async (req) => {
     }
 
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    const rw = lastUser && isKinyarwanda(String(lastUser.content || ""));
-    const system = rw ? SYSTEM_RW : SYSTEM_EN;
+    const userText = String(lastUser?.content || "");
+    const det = detectKinyarwanda(userText);
+    const persona = det.isRw ? PERSONA_RW : PERSONA_EN;
+    const rewriter = det.isRw ? REWRITER_RW : PERSONA_EN ? REWRITER_EN : REWRITER_EN;
+    const hard = isHardTask(userText);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: system }, ...messages],
-      }),
-    });
+    // Server-side debug log (NEVER returned to end users in chat text)
+    console.log("[egreed-ai] kw-detect", JSON.stringify({
+      confidence: det.confidence,
+      isKinyarwanda: det.isRw,
+      signals: det.signals,
+      hardTask: hard,
+      route: hard && OPENAI_KEY ? "openai" : "lovable",
+      preview: userText.slice(0, 80),
+    }));
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("Gateway error:", response.status, text);
-      const status = response.status === 429 ? 429 : response.status === 402 ? 402 : 502;
-      return new Response(JSON.stringify({ error: `AI gateway ${response.status}`, detail: text }), {
-        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // ── Step 1: draft answer
+    const draftMessages = [{ role: "system", content: persona }, ...messages];
+    let draft = "";
+    try {
+      if (hard && OPENAI_KEY) {
+        draft = await callOpenAI("gpt-4o-mini", draftMessages, OPENAI_KEY);
+      } else {
+        draft = await callLovable("google/gemini-2.5-flash", draftMessages, LOVABLE_API_KEY);
+      }
+    } catch (e) {
+      console.error("[egreed-ai] draft failed, fallback:", (e as Error).message);
+      draft = await callLovable("google/gemini-2.5-flash-lite", draftMessages, LOVABLE_API_KEY);
+    }
+    draft = sanitize(draft);
+
+    // ── Step 2: persona-rewrite pass (fast model) to enforce voice + strip leftovers
+    let final = draft;
+    try {
+      const rewritten = await callLovable("google/gemini-2.5-flash-lite", [
+        { role: "system", content: persona },
+        { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
+      ], LOVABLE_API_KEY);
+      if (rewritten && rewritten.trim().length > 10) final = rewritten;
+    } catch (e) {
+      console.error("[egreed-ai] rewrite skipped:", (e as Error).message);
     }
 
-    const data = await response.json();
-    let answer: string = data?.choices?.[0]?.message?.content ?? "";
-    answer = stripUrlsAndCitations(answer);
+    // ── Step 3: final hard sanitize
+    final = sanitize(final);
 
-    return new Response(JSON.stringify({ success: true, answer, kinyarwanda: rw }), {
+    return new Response(JSON.stringify({ success: true, answer: final }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("egreed-ai error:", e);
+    console.error("[egreed-ai] error:", e);
     return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
