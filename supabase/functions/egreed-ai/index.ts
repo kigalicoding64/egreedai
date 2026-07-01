@@ -133,15 +133,45 @@ async function callOpenAI(model: string, messages: any[], apiKey: string): Promi
   return data?.choices?.[0]?.message?.content ?? "";
 }
 
-// Heuristic: should we route to OpenAI for "hard" tasks?
+// Direct Google Gemini API (user-provided keys: `geminapi`, `gemin11`).
+// Used for hard tasks: coding, website generation, complex reasoning, and internal training drafts.
+async function callGemini(model: string, messages: any[], apiKey: string): Promise<string> {
+  const systemParts = messages.filter((m) => m.role === "system").map((m) => String(m.content ?? ""));
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: String(m.content ?? "") }],
+    }));
+  const body: any = { contents };
+  if (systemParts.length) body.system_instruction = { parts: [{ text: systemParts.join("\n\n") }] };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`gemini ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  return parts.map((p: any) => p?.text ?? "").join("").trim();
+}
+
+// Pick the first working user Gemini key. Rotates on failure.
+function getGeminiKeys(): string[] {
+  return [Deno.env.get("geminapi"), Deno.env.get("gemin11")].filter(Boolean) as string[];
+}
+
+// Heuristic: should we route to a stronger model for "hard" tasks?
 function isHardTask(text: string): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
-  const long = text.length > 600 || text.split(/\s+/).length > 110;
-  const codeish = /\b(code|debug|refactor|algorithm|architecture|sql|regex|typescript|python|rust|complexity|big-?o|proof|theorem|derive|integrate|differential|optimi[sz]e)\b/.test(t);
-  const reason = /\b(why|prove|explain in depth|step[- ]by[- ]step|analy[sz]e|compare in detail|design|plan|strategy)\b/.test(t);
-  return long || (codeish && reason) || /```/.test(text);
+  const long = text.length > 500 || text.split(/\s+/).length > 90;
+  const codeish = /\b(code|debug|refactor|algorithm|architecture|sql|regex|typescript|javascript|python|rust|react|nextjs|html|css|tailwind|api|endpoint|component|website|landing page|web app|build (me )?an? (app|site|web))\b/.test(t);
+  const reason = /\b(why|prove|explain in depth|step[- ]by[- ]step|analy[sz]e|compare in detail|design|plan|strategy|architect)\b/.test(t);
+  return long || codeish || reason || /```/.test(text);
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -149,11 +179,7 @@ serve(async (req) => {
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const OPENAI_KEY = Deno.env.get("openai") || Deno.env.get("openai1");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY missing" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const GEMINI_KEYS = getGeminiKeys();
 
     const { messages } = await req.json();
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -166,56 +192,71 @@ serve(async (req) => {
     const userText = String(lastUser?.content || "");
     const det = detectKinyarwanda(userText);
     const persona = det.isRw ? PERSONA_RW : PERSONA_EN;
-    const rewriter = det.isRw ? REWRITER_RW : PERSONA_EN ? REWRITER_EN : REWRITER_EN;
+    const rewriter = det.isRw ? REWRITER_RW : REWRITER_EN;
     const hard = isHardTask(userText);
 
-    // Server-side debug log (NEVER returned to end users in chat text)
+    // Route: hard task → user Gemini keys first, then OpenAI, then Lovable. Easy task → Lovable, then Gemini.
+    const route = hard && GEMINI_KEYS.length ? "gemini" : hard && OPENAI_KEY ? "openai" : LOVABLE_API_KEY ? "lovable" : GEMINI_KEYS.length ? "gemini" : "none";
+
     console.log("[egreed-ai] kw-detect", JSON.stringify({
-      confidence: det.confidence,
-      isKinyarwanda: det.isRw,
-      signals: det.signals,
-      hardTask: hard,
-      route: hard && OPENAI_KEY ? "openai" : "lovable",
-      preview: userText.slice(0, 80),
+      confidence: det.confidence, isKinyarwanda: det.isRw, signals: det.signals,
+      hardTask: hard, route, preview: userText.slice(0, 80),
     }));
 
-    // ── Step 1: draft answer
+    if (route === "none") {
+      return new Response(JSON.stringify({ error: "No AI provider configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Step 1: draft
     const draftMessages = [{ role: "system", content: persona }, ...messages];
     let draft = "";
-    try {
-      if (hard && OPENAI_KEY) {
-        draft = await callOpenAI("gpt-4o-mini", draftMessages, OPENAI_KEY);
-      } else {
-        draft = await callLovable("google/gemini-2.5-flash", draftMessages, LOVABLE_API_KEY);
+    const tryGemini = async () => {
+      let lastErr: any;
+      for (const k of GEMINI_KEYS) {
+        try { return await callGemini("gemini-2.0-flash-exp", draftMessages, k); }
+        catch (e) { lastErr = e; console.error("[egreed-ai] gemini key failed:", (e as Error).message); }
       }
+      throw lastErr ?? new Error("no gemini keys");
+    };
+    try {
+      if (route === "gemini") draft = await tryGemini();
+      else if (route === "openai") draft = await callOpenAI("gpt-4o-mini", draftMessages, OPENAI_KEY!);
+      else draft = await callLovable("google/gemini-2.5-flash", draftMessages, LOVABLE_API_KEY!);
     } catch (e) {
       console.error("[egreed-ai] draft failed, fallback:", (e as Error).message);
-      draft = await callLovable("google/gemini-2.5-flash-lite", draftMessages, LOVABLE_API_KEY);
+      if (GEMINI_KEYS.length) { try { draft = await tryGemini(); } catch {} }
+      if (!draft && LOVABLE_API_KEY) draft = await callLovable("google/gemini-2.5-flash-lite", draftMessages, LOVABLE_API_KEY);
     }
     draft = sanitize(draft);
 
-    // ── Step 2: persona-rewrite pass (fast model) to enforce voice + strip leftovers
+    // ── Step 2: persona-rewrite pass (skip for code-heavy responses to preserve fences)
     let final = draft;
-    try {
-      const rewritten = await callLovable("google/gemini-2.5-flash-lite", [
-        { role: "system", content: persona },
-        { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
-      ], LOVABLE_API_KEY);
-      if (rewritten && rewritten.trim().length > 10) final = rewritten;
-    } catch (e) {
-      console.error("[egreed-ai] rewrite skipped:", (e as Error).message);
+    const hasCode = /```/.test(draft);
+    if (!hasCode) {
+      try {
+        const rewritten = LOVABLE_API_KEY
+          ? await callLovable("google/gemini-2.5-flash-lite", [
+              { role: "system", content: persona },
+              { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
+            ], LOVABLE_API_KEY)
+          : GEMINI_KEYS.length
+            ? await callGemini("gemini-2.0-flash-exp", [
+                { role: "system", content: persona },
+                { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
+              ], GEMINI_KEYS[0])
+            : "";
+        if (rewritten && rewritten.trim().length > 10) final = rewritten;
+      } catch (e) {
+        console.error("[egreed-ai] rewrite skipped:", (e as Error).message);
+      }
     }
 
     // ── Step 3: final hard sanitize
     final = sanitize(final);
 
-    return new Response(JSON.stringify({ success: true, answer: final }), {
+    return new Response(JSON.stringify({ success: true, answer: final, route }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("[egreed-ai] error:", e);
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-});
+
