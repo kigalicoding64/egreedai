@@ -1,0 +1,11 @@
+{
+  "name": "EgreedAI",
+  "short_name": "EgreedAI",
+  "description": "Africa-first AI assistant built in Kigali by Egreed Technology.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "lang": "en",
+  "categories": ["productivity", "education", "business"]
+}
