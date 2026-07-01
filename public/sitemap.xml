@@ -1,36 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-
-  <!-- Homepage (highest authority) -->
   <url>
     <loc>https://ai.egreedtech.org/</loc>
+    <lastmod>2026-07-01</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
-    <lastmod>2026-07-01</lastmod>
   </url>
-
-  <!-- Knowledge base (SEO content page - IMPORTANT) -->
   <url>
-    <loc>https://ai.egreedtech.org/knowledge-base</loc>
+    <loc>https://ai.egreedtech.org/builder</loc>
+    <lastmod>2026-07-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-    <lastmod>2026-07-01</lastmod>
   </url>
-
-  <!-- Auth (LOW SEO VALUE - keep but de-prioritized) -->
   <url>
-    <loc>https://ai.egreedtech.org/auth</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.2</priority>
+    <loc>https://ai.egreedtech.org/kinyarwanda-eval</loc>
     <lastmod>2026-07-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
-
-  <!-- Settings (should NOT be SEO target) -->
   <url>
-    <loc>https://ai.egreedtech.org/settings</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.1</priority>
+    <loc>https://ai.egreedtech.org/model-eval</loc>
     <lastmod>2026-07-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
-
 </urlset>

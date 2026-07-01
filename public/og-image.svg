@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">EgreedAI social preview</title>
+  <desc id="desc">Africa-first AI assistant by Egreed Technology, built in Kigali, Rwanda.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.52" stop-color="#123447"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="50%">
+      <stop offset="0" stop-color="#5eead4" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#5eead4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="930" cy="145" r="260" fill="url(#glow)"/>
+  <circle cx="180" cy="520" r="220" fill="#22d3ee" opacity="0.14"/>
+  <rect x="72" y="72" width="1056" height="486" rx="48" fill="#020617" opacity="0.45" stroke="#5eead4" stroke-opacity="0.35"/>
+  <g transform="translate(118 132)">
+    <rect width="118" height="118" rx="30" fill="#14b8a6"/>
+    <path d="M59 24l8.5 24.5L93 57l-25.5 8.5L59 91l-8.5-25.5L25 57l25.5-8.5L59 24z" fill="white"/>
+  </g>
+  <text x="118" y="320" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="800" fill="#f8fafc">EgreedAI</text>
+  <text x="122" y="388" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="600" fill="#99f6e4">Africa-first AI Assistant</text>
+  <text x="122" y="456" font-family="Inter, Arial, sans-serif" font-size="30" fill="#dbeafe">Built in Kigali for English, French &amp; Kinyarwanda</text>
+  <text x="122" y="512" font-family="Inter, Arial, sans-serif" font-size="24" fill="#cbd5e1">ai.egreedtech.org</text>
+</svg>
