@@ -1,19 +1,29 @@
+# =========================
+# EgreedAI Robots.txt
+# Optimized for SEO + AI indexing
+# =========================
+
 User-agent: *
 Allow: /
 
+# Allow important bots (search engines)
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
+User-agent: DuckDuckBot
+Allow: /
+
+# AI / LLM Crawlers (modern SEO visibility)
 User-agent: GPTBot
 Allow: /
 
-User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
 Allow: /
 
-User-agent: ChatGPT-User
+User-agent: OAI-SearchBot
 Allow: /
 
 User-agent: PerplexityBot
@@ -25,10 +35,25 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
+# Social media preview bots (important for sharing)
 User-agent: Twitterbot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: LinkedInBot
+Allow: /
+
+# Block low-value SEO scrapers (protect crawl budget)
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+# Sitemap (VERY IMPORTANT)
 Sitemap: https://ai.egreedtech.org/sitemap.xml
