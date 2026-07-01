@@ -1,13 +1,21 @@
 # EgreedAI
 
-> Africa-first AI assistant built in Kigali, Rwanda by Egreed Technology LTD. Speaks English, French and Kinyarwanda with authentic African and Rwandan context.
+> Rwanda-first AI assistant built in Kigali by Egreed Technology LTD. Supports Kinyarwanda, English and French with authentic Rwandan and African context.
 
-EgreedAI is a multilingual chat assistant owned and operated by Egreed Technology LTD. Founder & CEO: Brayan Bayishime Shema. The assistant is tuned for African users — Rwandan history, East African business, Kinyarwanda language nuance, and practical everyday help.
+EgreedAI is a multilingual chat assistant owned and operated by Egreed Technology LTD for Rwandan students, businesses, educators, founders and everyday users. It is tuned for Rwanda and East Africa: Kinyarwanda language nuance, Rwandan history, local education needs, Kigali business context, software development, cloud hosting, cybersecurity and practical daily assistance.
 
 ## Pages
-- [Home](/): Chat with EgreedAI
-- [Knowledge Base](/knowledge-base): African & Rwandan reference material
-- [Sign in](/auth): User authentication
+- [Home](/): Chat with EgreedAI, the Rwanda-first AI assistant
+- [Builder](/builder): Build and export pages with AI assistance
+- [Kinyarwanda AI Evaluation](/kinyarwanda-eval): Evaluate Kinyarwanda response quality
+- [Model Evaluation](/model-eval): Compare AI response quality
+- [Knowledge Base](/knowledge): User-authenticated private knowledge base
+
+## Rwanda-focused use cases
+- Kinyarwanda writing, translation, summarization and learning support
+- Homework help and digital skills support for Rwandan students
+- Business planning, customer support drafts and software ideas for Kigali startups
+- Localized AI support in English, French and Kinyarwanda
 
 ## About the company
 - Name: Egreed Technology LTD (EgreedTech)

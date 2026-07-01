@@ -1,14 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-RW">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EgreedAI — Africa-first AI Assistant by Egreed Technology (Rwanda)</title>
     <meta name="description" content="EgreedAI is an Africa-first AI assistant built in Kigali by Egreed Technology. Chat in English, French, or Kinyarwanda — get smart, friendly answers with real African context." />
     <meta name="author" content="Egreed Technology LTD" />
+    <meta name="geo.region" content="RW" />
+    <meta name="geo.placename" content="Kigali, Rwanda" />
+    <meta name="geo.position" content="-1.9441;30.0619" />
+    <meta name="ICBM" content="-1.9441, 30.0619" />
     <meta name="keywords" content="EgreedAI, Egreed Technology, AI Rwanda, Kinyarwanda AI, African AI assistant, Kigali AI, chatbot Rwanda, AI Afrika, ikoranabuhanga Rwanda" />
     <link rel="canonical" href="https://ai.egreedtech.org/" />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="alternate" href="https://ai.egreedtech.org/" hreflang="en-RW" />
+    <link rel="alternate" href="https://ai.egreedtech.org/" hreflang="rw-RW" />
+    <link rel="alternate" href="https://ai.egreedtech.org/" hreflang="fr-RW" />
+    <link rel="alternate" href="https://ai.egreedtech.org/" hreflang="x-default" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="application-name" content="EgreedAI" />
+    <meta name="apple-mobile-web-app-title" content="EgreedAI" />
     <meta name="theme-color" content="#0F172A" />
 
     <meta property="og:type" content="website" />
@@ -16,15 +26,22 @@
     <meta property="og:title" content="EgreedAI — Africa-first AI Assistant by Egreed Technology" />
     <meta property="og:description" content="Smart, friendly AI built in Rwanda. Speaks English, French & Kinyarwanda with real African context." />
     <meta property="og:url" content="https://ai.egreedtech.org/" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://ai.egreedtech.org/og-image.svg" />
+    <meta property="og:image:alt" content="EgreedAI Africa-first AI assistant by Egreed Technology" />
+    <meta property="og:locale" content="en_RW" />
     <meta property="og:locale:alternate" content="rw_RW" />
     <meta property="og:locale:alternate" content="fr_FR" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="EgreedAI — Africa-first AI Assistant" />
     <meta name="twitter:description" content="Smart, friendly AI built in Rwanda by Egreed Technology. Speaks Kinyarwanda, English & French." />
+    <meta name="twitter:image" content="https://ai.egreedtech.org/og-image.svg" />
 
-    <link rel="icon" type="image/x-icon" href="https://storage.googleapis.com/gpt-engineer-file-uploads/qdzvzRzMiPSZkTxKWqTC5t4zXDV2/uploads/1767209161447-egreed logo.webp">
+    <link rel="preconnect" href="https://egreedtech.org" />
+    <link rel="dns-prefetch" href="https://egreedtech.org" />
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="manifest" href="/site.webmanifest" />
 
     <script type="application/ld+json">
     {
@@ -47,6 +64,8 @@
       "name": "EgreedAI",
       "url": "https://ai.egreedtech.org/",
       "applicationCategory": "BusinessApplication",
+      "areaServed": [{ "@type": "Country", "name": "Rwanda" }, { "@type": "Continent", "name": "Africa" }],
+      "audience": { "@type": "Audience", "geographicArea": { "@type": "Country", "name": "Rwanda" } },
       "operatingSystem": "Web",
       "inLanguage": ["en","fr","rw"],
       "description": "Africa-first AI assistant that speaks English, French and Kinyarwanda — built in Rwanda by Egreed Technology.",
@@ -54,9 +73,40 @@
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
     }
     </script>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the best AI assistant for Rwandan users?",
+          "acceptedAnswer": { "@type": "Answer", "text": "EgreedAI is designed for Rwandan users with support for Kinyarwanda, English and French, plus local context for education, business and everyday tasks." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does EgreedAI support Kinyarwanda?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. EgreedAI supports Kinyarwanda alongside English and French for chat, writing help, translation and local knowledge tasks." }
+        }
+      ]
+    }
+    </script>
 </head>
 
   <body>
+    <noscript>
+      <main>
+        <h1>EgreedAI — Rwanda-first AI assistant for Kinyarwanda, English and French</h1>
+        <p>EgreedAI is built in Kigali by Egreed Technology LTD for Rwandan students, businesses, educators and everyday users who need practical AI support with local African context.</p>
+        <ul>
+          <li>Kinyarwanda AI assistant for local questions, writing, translation and learning.</li>
+          <li>English and French AI chat for Rwanda and East African business use cases.</li>
+          <li>AI builder, knowledge base tools and model evaluation pages for teams.</li>
+        </ul>
+        <p>Contact Egreed Technology in Kigali: egreedtechnology@gmail.com or WhatsApp +250 795 822 290.</p>
+      </main>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

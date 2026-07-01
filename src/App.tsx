@@ -11,6 +11,7 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import KinyarwandaEval from "./pages/KinyarwandaEval";
 import ModelEval from "./pages/ModelEval";
 import NotFound from "./pages/NotFound";
+import { Seo } from "./components/Seo";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <Seo />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
