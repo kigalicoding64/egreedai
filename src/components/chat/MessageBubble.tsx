@@ -85,10 +85,10 @@ export function MessageBubble({ message, autoSpeak = false }: MessageBubbleProps
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3 relative",
+            "relative px-4 py-3 leading-relaxed",
             isUser
-              ? "bg-primary text-primary-foreground rounded-tr-sm"
-              : "glass rounded-tl-sm"
+              ? "rounded-2xl rounded-tr-md bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground shadow-md shadow-primary/20"
+              : "rounded-2xl rounded-tl-md glass border border-border/60"
           )}
         >
           {isUser ? (
