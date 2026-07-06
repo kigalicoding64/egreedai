@@ -89,6 +89,20 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             return <h3 className="text-base font-bold mb-2 mt-3">{children}</h3>;
           },
           blockquote({ children }) {
+            const callout = extractCallout(children);
+            if (callout) {
+              const meta = CALLOUTS[callout.type];
+              const Icon = meta.icon;
+              return (
+                <div className={cn('my-3 rounded-lg border-l-4 px-4 py-3 flex gap-3', meta.className)}>
+                  <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">{meta.label}</div>
+                    <div className="text-foreground text-sm leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0">{callout.nodes}</div>
+                  </div>
+                </div>
+              );
+            }
             return (
               <blockquote className="border-l-4 border-primary pl-4 italic my-3 text-muted-foreground">
                 {children}
