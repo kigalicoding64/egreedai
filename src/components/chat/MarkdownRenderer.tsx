@@ -1,5 +1,42 @@
 import ReactMarkdown from 'react-markdown';
+import { Info, Lightbulb, AlertTriangle, CheckCircle2, XCircle, StickyNote } from 'lucide-react';
 import { CodeBlock } from './CodeBlock';
+import { cn } from '@/lib/utils';
+
+const CALLOUTS: Record<string, { icon: React.ComponentType<{ className?: string }>; className: string; label: string }> = {
+  NOTE: { icon: StickyNote, className: 'border-blue-500/40 bg-blue-500/5 text-blue-600 dark:text-blue-300', label: 'Note' },
+  INFO: { icon: Info, className: 'border-sky-500/40 bg-sky-500/5 text-sky-600 dark:text-sky-300', label: 'Info' },
+  TIP: { icon: Lightbulb, className: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300', label: 'Tip' },
+  SUCCESS: { icon: CheckCircle2, className: 'border-green-500/40 bg-green-500/5 text-green-600 dark:text-green-300', label: 'Success' },
+  WARNING: { icon: AlertTriangle, className: 'border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-300', label: 'Warning' },
+  ERROR: { icon: XCircle, className: 'border-red-500/40 bg-red-500/5 text-red-600 dark:text-red-300', label: 'Error' },
+  DANGER: { icon: XCircle, className: 'border-red-500/40 bg-red-500/5 text-red-600 dark:text-red-300', label: 'Danger' },
+};
+
+function extractCallout(children: React.ReactNode): { type: string; nodes: React.ReactNode } | null {
+  const arr = Array.isArray(children) ? children : [children];
+  // Find first text-ish content
+  for (const c of arr) {
+    if (typeof c === 'string') {
+      const m = c.match(/^\s*\[!(\w+)\]\s*/);
+      if (m && CALLOUTS[m[1].toUpperCase()]) {
+        const type = m[1].toUpperCase();
+        const rest = c.slice(m[0].length);
+        const remaining = arr.map((x) => (x === c ? rest : x));
+        return { type, nodes: remaining };
+      }
+    }
+    // React element wrapping text (e.g. <p>)
+    if (c && typeof c === 'object' && 'props' in (c as any)) {
+      const inner = (c as any).props?.children;
+      const nested = extractCallout(inner);
+      if (nested) return nested;
+    }
+    break;
+  }
+  return null;
+}
+
 
 interface MarkdownRendererProps {
   content: string;
@@ -52,6 +89,20 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             return <h3 className="text-base font-bold mb-2 mt-3">{children}</h3>;
           },
           blockquote({ children }) {
+            const callout = extractCallout(children);
+            if (callout) {
+              const meta = CALLOUTS[callout.type];
+              const Icon = meta.icon;
+              return (
+                <div className={cn('my-3 rounded-lg border-l-4 px-4 py-3 flex gap-3', meta.className)}>
+                  <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">{meta.label}</div>
+                    <div className="text-foreground text-sm leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0">{callout.nodes}</div>
+                  </div>
+                </div>
+              );
+            }
             return (
               <blockquote className="border-l-4 border-primary pl-4 italic my-3 text-muted-foreground">
                 {children}
