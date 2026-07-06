@@ -222,7 +222,7 @@ export function ChatArea({
                 autoSpeak={voiceModeActive && index === messages.length - 1}
               />
             ))}
-            {isLoading && <TypingIndicator />}
+            {isLoading && <TypingIndicator isSearching={isSearching} />}
             <div ref={messagesEndRef} />
           </div>
         )}
