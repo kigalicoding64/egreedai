@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import Builder from "./pages/Builder";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import Creator from "./pages/Creator";
+
 import KinyarwandaEval from "./pages/KinyarwandaEval";
 import ModelEval from "./pages/ModelEval";
 import NotFound from "./pages/NotFound";
