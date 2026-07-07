@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import Builder from "./pages/Builder";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import Creator from "./pages/Creator";
+
 import KinyarwandaEval from "./pages/KinyarwandaEval";
 import ModelEval from "./pages/ModelEval";
 import NotFound from "./pages/NotFound";
@@ -28,6 +30,8 @@ const App = () => (
           <Route path="/settings" element={<Settings />} />
           <Route path="/builder" element={<Builder />} />
           <Route path="/knowledge" element={<KnowledgeBase />} />
+          <Route path="/creator" element={<Creator />} />
+
           <Route path="/kinyarwanda-eval" element={<KinyarwandaEval />} />
           <Route path="/model-eval" element={<ModelEval />} />
           <Route path="*" element={<NotFound />} />
