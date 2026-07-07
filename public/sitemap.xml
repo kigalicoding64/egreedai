@@ -1,27 +1,180 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Homepage -->
   <url>
     <loc>https://ai.egreedtech.org/</loc>
-    <lastmod>2026-07-01</lastmod>
+    <lastmod>2026-07-07</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+
+  <!-- AI Builder -->
   <url>
     <loc>https://ai.egreedtech.org/builder</loc>
-    <lastmod>2026-07-01</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
   </url>
+
+  <!-- AI Chat -->
+  <url>
+    <loc>https://ai.egreedtech.org/chat</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- AI Models -->
+  <url>
+    <loc>https://ai.egreedtech.org/models</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- AI Playground -->
+  <url>
+    <loc>https://ai.egreedtech.org/playground</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- API -->
+  <url>
+    <loc>https://ai.egreedtech.org/api</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- API Documentation -->
+  <url>
+    <loc>https://ai.egreedtech.org/docs</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- Developers -->
+  <url>
+    <loc>https://ai.egreedtech.org/developers</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Pricing -->
+  <url>
+    <loc>https://ai.egreedtech.org/pricing</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Enterprise -->
+  <url>
+    <loc>https://ai.egreedtech.org/enterprise</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Blog -->
+  <url>
+    <loc>https://ai.egreedtech.org/blog</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- Research -->
+  <url>
+    <loc>https://ai.egreedtech.org/research</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- AI Safety -->
+  <url>
+    <loc>https://ai.egreedtech.org/safety</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- Kinyarwanda Evaluation -->
   <url>
     <loc>https://ai.egreedtech.org/kinyarwanda-eval</loc>
-    <lastmod>2026-07-01</lastmod>
+    <lastmod>2026-07-07</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.80</priority>
   </url>
+
+  <!-- Model Evaluation -->
   <url>
     <loc>https://ai.egreedtech.org/model-eval</loc>
-    <lastmod>2026-07-01</lastmod>
+    <lastmod>2026-07-07</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.80</priority>
   </url>
+
+  <!-- Benchmarks -->
+  <url>
+    <loc>https://ai.egreedtech.org/benchmarks</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- Changelog -->
+  <url>
+    <loc>https://ai.egreedtech.org/changelog</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+
+  <!-- Status -->
+  <url>
+    <loc>https://ai.egreedtech.org/status</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.70</priority>
+  </url>
+
+  <!-- About -->
+  <url>
+    <loc>https://ai.egreedtech.org/about</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+  </url>
+
+  <!-- Contact -->
+  <url>
+    <loc>https://ai.egreedtech.org/contact</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.65</priority>
+  </url>
+
+  <!-- Privacy -->
+  <url>
+    <loc>https://ai.egreedtech.org/privacy</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.50</priority>
+  </url>
+
+  <!-- Terms -->
+  <url>
+    <loc>https://ai.egreedtech.org/terms</loc>
+    <lastmod>2026-07-07</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.50</priority>
+  </url>
+
 </urlset>
