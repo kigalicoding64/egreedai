@@ -38,6 +38,238 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_email: string | null
+          at: string
+          id: string
+          metadata: Json
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_email?: string | null
+          at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_email?: string | null
+          at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: []
+      }
+      creator_config: {
+        Row: {
+          active: boolean
+          constitutional_principles: string | null
+          created_at: string
+          global_instructions: string | null
+          id: string
+          identity: string | null
+          mission: string | null
+          personality: string | null
+          reasoning_policies: string | null
+          response_style: string | null
+          scope: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          constitutional_principles?: string | null
+          created_at?: string
+          global_instructions?: string | null
+          id?: string
+          identity?: string | null
+          mission?: string | null
+          personality?: string | null
+          reasoning_policies?: string | null
+          response_style?: string | null
+          scope?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          constitutional_principles?: string | null
+          created_at?: string
+          global_instructions?: string | null
+          id?: string
+          identity?: string | null
+          mission?: string | null
+          personality?: string | null
+          reasoning_policies?: string | null
+          response_style?: string | null
+          scope?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      creator_knowledge_chunks: {
+        Row: {
+          active: boolean
+          chunk_index: number
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          source_id: string
+          tokens: number | null
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          chunk_index: number
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source_id: string
+          tokens?: number | null
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source_id?: string
+          tokens?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_knowledge_chunks_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "creator_knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_knowledge_sources: {
+        Row: {
+          approval_state: string
+          approved_by: string | null
+          confidence: number | null
+          config: Json
+          created_at: string
+          created_by: string | null
+          current_version: number
+          id: string
+          kind: string
+          last_ingested_at: string | null
+          raw_content: string | null
+          schedule: string | null
+          scope: string
+          scope_ref: string | null
+          status: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          approval_state?: string
+          approved_by?: string | null
+          confidence?: number | null
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          id?: string
+          kind: string
+          last_ingested_at?: string | null
+          raw_content?: string | null
+          schedule?: string | null
+          scope?: string
+          scope_ref?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          approval_state?: string
+          approved_by?: string | null
+          confidence?: number | null
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          current_version?: number
+          id?: string
+          kind?: string
+          last_ingested_at?: string | null
+          raw_content?: string | null
+          schedule?: string | null
+          scope?: string
+          scope_ref?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      creator_knowledge_versions: {
+        Row: {
+          chunk_count: number
+          created_at: string
+          created_by: string | null
+          id: string
+          snapshot: Json
+          source_id: string
+          version: number
+        }
+        Insert: {
+          chunk_count?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          snapshot?: Json
+          source_id: string
+          version: number
+        }
+        Update: {
+          chunk_count?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          snapshot?: Json
+          source_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_knowledge_versions_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "creator_knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_documents: {
         Row: {
           content: string
@@ -175,15 +407,59 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_creator: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin_email: { Args: { _email: string }; Returns: boolean }
+      match_creator_knowledge: {
+        Args: {
+          match_count?: number
+          min_similarity?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          source_id: string
+          source_kind: string
+          source_title: string
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "creator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -310,6 +586,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "creator", "user"],
+    },
   },
 } as const

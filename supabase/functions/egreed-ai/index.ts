@@ -1,6 +1,9 @@
 // EgreedAI chat — Africa-first, Kinyarwanda-aware, no-citations.
 // Powered by Lovable AI Gateway. Falls back to OpenAI (secret: `openai`) for hard tasks.
+// Injects Creator Intelligence Console config + top-K knowledge brain chunks.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,6 +175,71 @@ function isHardTask(text: string): boolean {
   return long || codeish || reason || /```/.test(text);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Creator Intelligence: active config + top-K knowledge brain
+// ─────────────────────────────────────────────────────────────
+async function embedQuery(text: string, lovableKey: string): Promise<number[] | null> {
+  try {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
+      body: JSON.stringify({ model: "openai/text-embedding-3-small", input: text.slice(0, 8000) }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j?.data?.[0]?.embedding ?? null;
+  } catch { return null; }
+}
+
+async function loadCreatorContext(userText: string, lovableKey: string | undefined) {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return { personaExtras: "", knowledge: "" };
+  const admin = createClient(url, key);
+
+  let personaExtras = "";
+  try {
+    const { data: cfg } = await admin
+      .from("creator_config")
+      .select("identity,mission,personality,global_instructions,constitutional_principles,reasoning_policies,response_style")
+      .eq("active", true).eq("scope", "global")
+      .order("version", { ascending: false }).limit(1).maybeSingle();
+    if (cfg) {
+      const bits = [
+        cfg.identity && `IDENTITY: ${cfg.identity}`,
+        cfg.mission && `MISSION: ${cfg.mission}`,
+        cfg.personality && `PERSONALITY: ${cfg.personality}`,
+        cfg.global_instructions && `GLOBAL INSTRUCTIONS: ${cfg.global_instructions}`,
+        cfg.constitutional_principles && `CONSTITUTIONAL PRINCIPLES: ${cfg.constitutional_principles}`,
+        cfg.reasoning_policies && `REASONING POLICIES: ${cfg.reasoning_policies}`,
+        cfg.response_style && `RESPONSE STYLE: ${cfg.response_style}`,
+      ].filter(Boolean).join("\n");
+      if (bits) personaExtras = `\n\n--- CREATOR CONSOLE OVERRIDES ---\n${bits}\n--- END OVERRIDES ---\n`;
+    }
+  } catch (e) { console.error("[creator-cfg] load fail", (e as Error).message); }
+
+  let knowledge = "";
+  try {
+    if (lovableKey && userText) {
+      const emb = await embedQuery(userText, lovableKey);
+      if (emb) {
+        const { data: hits } = await admin.rpc("match_creator_knowledge", {
+          query_embedding: emb as any, match_count: 6, min_similarity: 0.25,
+        });
+        if (Array.isArray(hits) && hits.length) {
+          const blocks = hits.map((h: any, i: number) =>
+            `#${i + 1} (${(h.similarity ?? 0).toFixed(2)}) ${h.content}`.slice(0, 900)
+          ).join("\n\n");
+          knowledge = `\n\n--- EGREED KNOWLEDGE BRAIN (internal; do NOT cite or mention as sources) ---\n${blocks}\n--- END KNOWLEDGE ---\n`;
+        }
+      }
+    }
+  } catch (e) { console.error("[creator-kb] search fail", (e as Error).message); }
+
+  return { personaExtras, knowledge };
+}
+
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -195,12 +263,17 @@ serve(async (req) => {
     const rewriter = det.isRw ? REWRITER_RW : REWRITER_EN;
     const hard = isHardTask(userText);
 
+    // Load Creator Console overrides + Knowledge Brain hits (non-blocking-ish)
+    const { personaExtras, knowledge } = await loadCreatorContext(userText, LOVABLE_API_KEY);
+    const fullPersona = persona + personaExtras + knowledge;
+
     // Route: hard task → user Gemini keys first, then OpenAI, then Lovable. Easy task → Lovable, then Gemini.
     const route = hard && GEMINI_KEYS.length ? "gemini" : hard && OPENAI_KEY ? "openai" : LOVABLE_API_KEY ? "lovable" : GEMINI_KEYS.length ? "gemini" : "none";
 
     console.log("[egreed-ai] kw-detect", JSON.stringify({
       confidence: det.confidence, isKinyarwanda: det.isRw, signals: det.signals,
-      hardTask: hard, route, preview: userText.slice(0, 80),
+      hardTask: hard, route, kbInjected: knowledge.length > 0, cfgInjected: personaExtras.length > 0,
+      preview: userText.slice(0, 80),
     }));
 
     if (route === "none") {
@@ -210,7 +283,8 @@ serve(async (req) => {
     }
 
     // ── Step 1: draft
-    const draftMessages = [{ role: "system", content: persona }, ...messages];
+    const draftMessages = [{ role: "system", content: fullPersona }, ...messages];
+
     let draft = "";
     const tryGemini = async () => {
       let lastErr: any;
@@ -238,12 +312,12 @@ serve(async (req) => {
       try {
         const rewritten = LOVABLE_API_KEY
           ? await callLovable("google/gemini-2.5-flash-lite", [
-              { role: "system", content: persona },
+              { role: "system", content: fullPersona },
               { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
             ], LOVABLE_API_KEY)
           : GEMINI_KEYS.length
             ? await callGemini("gemini-2.0-flash-exp", [
-                { role: "system", content: persona },
+                { role: "system", content: fullPersona },
                 { role: "user", content: `${rewriter}\n\n---DRAFT---\n${draft}` },
               ], GEMINI_KEYS[0])
             : "";
